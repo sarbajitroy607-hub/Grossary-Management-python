@@ -398,6 +398,7 @@ input, select, textarea { font-family: inherit; }
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--transition-base), transform var(--transition-base);
   display: flex; flex-direction: column;
+  position: relative;        /* keeps .oos-overlay contained inside the card */
 }
 .product-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
 .product-card-img {
