@@ -1,27 +1,31 @@
-﻿from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session
 import os
+import uuid
+
+from database import (
+    init_db, get_all_products, get_product,
+    update_stock, add_product, record_sale, get_sales_history
+)
 
 app = Flask(__name__)
 app.secret_key = 'kiryana_store_secret_key_2024'
 
-stock = {
-    "rice": 10, "wheat": 10, "flour": 10, "oil": 10,
-    "daal": 10, "soap": 10, "surf": 10,
-}
-prices = {
-    "rice": 50.0, "wheat": 40.0, "flour": 30.0, "oil": 100.0,
-    "daal": 60.0, "soap": 20.0, "surf": 25.0,
-}
+# In-memory carts only (per session, not worth persisting)
 carts = {}
+
+# ── Initialise database on startup ──────────────────────────────────
+init_db()
+
 
 def get_cart():
     sid = session.get("sid")
     if not sid:
-        import uuid
         sid = str(uuid.uuid4())
         session["sid"] = sid
-    return carts.setdefault(sid, {})
+    return carts.setdefault(sid, {}), sid
 
+
+# ── Pages ────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -34,16 +38,25 @@ def user_page():
 def admin_page():
     return render_template("admin.html")
 
+
+# ── Public API ───────────────────────────────────────────────────────
 @app.route("/api/items")
 def api_items():
-    items = [{"name": n, "price": prices[n], "stock": q} for n, q in stock.items()]
+    products = get_all_products()
+    items = [{"name": p["name"], "price": p["price"], "stock": p["stock"]} for p in products]
     return jsonify(items)
+
 
 @app.route("/api/cart")
 def api_cart():
-    cart = get_cart()
-    items = [{"name": n, "qty": q, "price": prices.get(n, 0), "total": prices.get(n, 0)*q} for n, q in cart.items()]
+    cart, _ = get_cart()
+    items = []
+    for name, qty in cart.items():
+        prod = get_product(name)
+        price = prod["price"] if prod else 0
+        items.append({"name": name, "qty": qty, "price": price, "total": price * qty})
     return jsonify({"items": items, "grand_total": sum(i["total"] for i in items)})
+
 
 @app.route("/api/cart/add", methods=["POST"])
 def api_cart_add():
@@ -51,21 +64,24 @@ def api_cart_add():
     item = data.get("item", "").lower().strip()
     try:
         qty = int(data.get("qty", 0))
-    except:
+    except Exception:
         return jsonify({"success": False, "message": "Invalid quantity."}), 400
-    if item not in stock:
+
+    prod = get_product(item)
+    if not prod:
         return jsonify({"success": False, "message": f"'{item}' is not available."}), 404
     if qty <= 0:
         return jsonify({"success": False, "message": "Quantity must be > 0."}), 400
-    if qty > stock[item]:
-        return jsonify({"success": False, "message": f"Only {stock[item]} units in stock."}), 400
-    cart = get_cart()
+    if qty > prod["stock"]:
+        return jsonify({"success": False, "message": f"Only {prod['stock']} units in stock."}), 400
+
+    cart, _ = get_cart()
     current = cart.get(item, 0)
-    if current + qty > stock[item] + current:
-        return jsonify({"success": False, "message": "Not enough stock."}), 400
-    stock[item] -= qty
+    new_stock = prod["stock"] - qty
+    update_stock(item, new_stock)
     cart[item] = current + qty
     return jsonify({"success": True, "message": f"Added {qty}x {item.capitalize()} to cart!"})
+
 
 @app.route("/api/cart/remove", methods=["POST"])
 def api_cart_remove():
@@ -73,38 +89,56 @@ def api_cart_remove():
     item = data.get("item", "").lower().strip()
     try:
         qty = int(data.get("qty", 0))
-    except:
+    except Exception:
         return jsonify({"success": False, "message": "Invalid quantity."}), 400
-    cart = get_cart()
+
+    cart, _ = get_cart()
     if item not in cart:
         return jsonify({"success": False, "message": f"'{item}' not in cart."}), 404
     if qty <= 0 or qty > cart[item]:
         return jsonify({"success": False, "message": f"You only have {cart.get(item,0)} in cart."}), 400
-    stock[item] += qty
+
+    prod = get_product(item)
+    if prod:
+        update_stock(item, prod["stock"] + qty)
     cart[item] -= qty
     if cart[item] == 0:
         del cart[item]
     return jsonify({"success": True, "message": f"Removed {qty}x {item.capitalize()} from cart."})
 
+
 @app.route("/api/cart/clear", methods=["POST"])
 def api_cart_clear():
-    cart = get_cart()
-    for item, qty in cart.items():
-        if item in stock:
-            stock[item] += qty
+    cart, _ = get_cart()
+    for name, qty in cart.items():
+        prod = get_product(name)
+        if prod:
+            update_stock(name, prod["stock"] + qty)
     cart.clear()
     return jsonify({"success": True})
 
+
 @app.route("/api/checkout", methods=["POST"])
 def api_checkout():
-    cart = get_cart()
+    cart, sid = get_cart()
     if not cart:
         return jsonify({"success": False, "message": "Your cart is empty!"}), 400
-    receipt = [{"name": n, "qty": q, "price": prices.get(n,0), "total": prices.get(n,0)*q} for n,q in cart.items()]
+
+    receipt = []
+    for name, qty in cart.items():
+        prod = get_product(name)
+        price = prod["price"] if prod else 0
+        total = price * qty
+        receipt.append({"name": name, "qty": qty, "price": price, "total": total})
+        # Persist each sale line to the database
+        record_sale(sid, name, qty, price)
+
     grand_total = sum(i["total"] for i in receipt)
     cart.clear()
     return jsonify({"success": True, "receipt": receipt, "grand_total": grand_total})
 
+
+# ── Admin API ────────────────────────────────────────────────────────
 @app.route("/api/admin/login", methods=["POST"])
 def api_admin_login():
     data = request.json
@@ -113,10 +147,12 @@ def api_admin_login():
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Invalid credentials."}), 401
 
+
 @app.route("/api/admin/logout", methods=["POST"])
 def api_admin_logout():
     session.pop("admin", None)
     return jsonify({"success": True})
+
 
 @app.route("/api/admin/stock", methods=["POST"])
 def api_admin_stock():
@@ -126,12 +162,14 @@ def api_admin_stock():
     item = data.get("item", "").lower().strip()
     try:
         qty = int(data.get("qty", 0))
-    except:
+    except Exception:
         return jsonify({"success": False, "message": "Invalid quantity."}), 400
-    if item not in stock:
+
+    if not get_product(item):
         return jsonify({"success": False, "message": f"'{item}' does not exist."}), 404
-    stock[item] = qty
+    update_stock(item, qty)
     return jsonify({"success": True, "message": f"Stock for '{item.capitalize()}' updated to {qty}."})
+
 
 @app.route("/api/admin/add_item", methods=["POST"])
 def api_admin_add_item():
@@ -140,15 +178,24 @@ def api_admin_add_item():
     data = request.json
     item = data.get("item", "").lower().strip()
     try:
-        qty = int(data.get("qty", 0))
+        qty   = int(data.get("qty", 0))
         price = float(data.get("price", 0))
-    except:
+    except Exception:
         return jsonify({"success": False, "message": "Invalid quantity or price."}), 400
     if not item:
         return jsonify({"success": False, "message": "Item name required."}), 400
-    stock[item] = qty
-    prices[item] = price
+
+    add_product(item, price, qty)
     return jsonify({"success": True, "message": f"'{item.capitalize()}' added to store!"})
+
+
+@app.route("/api/admin/sales")
+def api_admin_sales():
+    """Bonus endpoint: recent sales history."""
+    if not session.get("admin"):
+        return jsonify({"success": False, "message": "Unauthorized."}), 403
+    return jsonify(get_sales_history())
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
