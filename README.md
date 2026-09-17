@@ -1,5 +1,5 @@
-youtube channel : (https://www.youtube.com/@syntax_cypher)
-# Kiryana Store Management System
+
+# Grossary  Management System
 
 This project is a simple **Grocery Store Management System** built with Python's `tkinter` library. It simulates an online grocery store where users can view items, add items to a cart, remove items, and check out. The system also includes basic user authentication and administrative features for stock management.
 
