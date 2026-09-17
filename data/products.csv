@@ -1,0 +1,8 @@
+name,price,stock,category
+rice,50.0,10,Staples
+wheat,40.0,10,Staples
+flour,30.0,10,Staples
+oil,100.0,10,Oils
+daal,60.0,10,Staples
+soap,20.0,10,Cleaning
+surf,25.0,10,Cleaning

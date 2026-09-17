@@ -1,140 +1,141 @@
 """
-database.py — SQLite persistent storage for GroceryPro
-Data is saved to  store_data.db  in the project folder.
+database.py — CSV-based persistent storage for GroceryPro
+----------------------------------------------------------
+Two CSV files inside the  data/  folder:
+  data/products.csv  —  all grocery items (name, price, stock, category)
+  data/sales.csv     —  every checkout line-item (session, item, qty, price, total, date)
 """
 
-import sqlite3
+import csv
 import os
+from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "store_data.db")
+# ── File paths ───────────────────────────────────────────────────────
+BASE_DIR      = os.path.dirname(__file__)
+DATA_DIR      = os.path.join(BASE_DIR, "data")
+PRODUCTS_CSV  = os.path.join(DATA_DIR, "products.csv")
+SALES_CSV     = os.path.join(DATA_DIR, "sales.csv")
+
+PRODUCTS_FIELDS = ["name", "price", "stock", "category"]
+SALES_FIELDS    = ["session_id", "item_name", "qty", "unit_price", "total", "sold_at"]
+
+# Default stock loaded when products.csv doesn't exist yet
+DEFAULT_PRODUCTS = [
+    {"name": "rice",  "price": 50.0,  "stock": 10, "category": "Staples"},
+    {"name": "wheat", "price": 40.0,  "stock": 10, "category": "Staples"},
+    {"name": "flour", "price": 30.0,  "stock": 10, "category": "Staples"},
+    {"name": "oil",   "price": 100.0, "stock": 10, "category": "Oils"},
+    {"name": "daal",  "price": 60.0,  "stock": 10, "category": "Staples"},
+    {"name": "soap",  "price": 20.0,  "stock": 10, "category": "Cleaning"},
+    {"name": "surf",  "price": 25.0,  "stock": 10, "category": "Cleaning"},
+]
 
 
-def get_connection():
-    """Return a connection with row_factory so rows behave like dicts."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
+# ── Init ─────────────────────────────────────────────────────────────
 
 def init_db():
-    """
-    Create tables if they don't exist and seed default stock/prices
-    only on the very first run (when the table is empty).
-    """
-    conn = get_connection()
-    c = conn.cursor()
+    """Create the data/ folder and CSV files if they don't exist."""
+    os.makedirs(DATA_DIR, exist_ok=True)
 
-    # ── Products table ──────────────────────────────────────────────
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS products (
-            name    TEXT PRIMARY KEY,
-            price   REAL NOT NULL,
-            stock   INTEGER NOT NULL DEFAULT 0,
-            category TEXT DEFAULT 'General',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    # products.csv — seed defaults only on first run
+    if not os.path.exists(PRODUCTS_CSV):
+        _write_products(DEFAULT_PRODUCTS)
 
-    # ── Sales / receipt history ──────────────────────────────────────
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS sales (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id  TEXT NOT NULL,
-            item_name   TEXT NOT NULL,
-            qty         INTEGER NOT NULL,
-            unit_price  REAL NOT NULL,
-            total       REAL NOT NULL,
-            sold_at     DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # ── Seed default data only if products table is empty ───────────
-    c.execute("SELECT COUNT(*) FROM products")
-    if c.fetchone()[0] == 0:
-        defaults = [
-            ("rice",  50.0,  10, "Staples"),
-            ("wheat", 40.0,  10, "Staples"),
-            ("flour", 30.0,  10, "Staples"),
-            ("oil",  100.0,  10, "Oils"),
-            ("daal",  60.0,  10, "Staples"),
-            ("soap",  20.0,  10, "Cleaning"),
-            ("surf",  25.0,  10, "Cleaning"),
-        ]
-        c.executemany(
-            "INSERT INTO products (name, price, stock, category) VALUES (?, ?, ?, ?)",
-            defaults
-        )
-
-    conn.commit()
-    conn.close()
+    # sales.csv — just create a header-only file if missing
+    if not os.path.exists(SALES_CSV):
+        with open(SALES_CSV, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
+            writer.writeheader()
 
 
-# ── Product helpers ─────────────────────────────────────────────────
+# ── Internal helpers ─────────────────────────────────────────────────
+
+def _read_products():
+    """Read products.csv and return list of dicts (typed correctly)."""
+    products = []
+    with open(PRODUCTS_CSV, "r", newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            products.append({
+                "name":     row["name"],
+                "price":    float(row["price"]),
+                "stock":    int(row["stock"]),
+                "category": row.get("category", "General"),
+            })
+    return products
+
+
+def _write_products(products):
+    """Overwrite products.csv with the given list of dicts."""
+    with open(PRODUCTS_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=PRODUCTS_FIELDS)
+        writer.writeheader()
+        writer.writerows(products)
+
+
+# ── Product API ───────────────────────────────────────────────────────
 
 def get_all_products():
-    """Return list of all products as dicts."""
-    conn = get_connection()
-    rows = conn.execute("SELECT * FROM products ORDER BY name").fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    """Return list of all product dicts."""
+    return _read_products()
 
 
 def get_product(name):
-    """Return a single product dict or None."""
-    conn = get_connection()
-    row = conn.execute("SELECT * FROM products WHERE name = ?", (name,)).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    """Return one product dict by name, or None."""
+    for p in _read_products():
+        if p["name"] == name:
+            return p
+    return None
 
 
 def update_stock(name, new_qty):
-    """Set stock to new_qty for a product. Returns True on success."""
-    conn = get_connection()
-    cur = conn.execute(
-        "UPDATE products SET stock = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?",
-        (new_qty, name)
-    )
-    conn.commit()
-    conn.close()
-    return cur.rowcount > 0
+    """Set the stock of a product and save to CSV. Returns True on success."""
+    products = _read_products()
+    found = False
+    for p in products:
+        if p["name"] == name:
+            p["stock"] = new_qty
+            found = True
+            break
+    if found:
+        _write_products(products)
+    return found
 
 
 def add_product(name, price, qty, category="General"):
-    """Insert or replace a product."""
-    conn = get_connection()
-    conn.execute(
-        """INSERT INTO products (name, price, stock, category)
-           VALUES (?, ?, ?, ?)
-           ON CONFLICT(name) DO UPDATE SET
-               price    = excluded.price,
-               stock    = excluded.stock,
-               category = excluded.category,
-               updated_at = CURRENT_TIMESTAMP""",
-        (name, price, qty, category)
-    )
-    conn.commit()
-    conn.close()
+    """Add a new product or update an existing one, then save to CSV."""
+    products = _read_products()
+    for p in products:
+        if p["name"] == name:          # update existing
+            p["price"]    = price
+            p["stock"]    = qty
+            p["category"] = category
+            _write_products(products)
+            return
+    # new product
+    products.append({"name": name, "price": price, "stock": qty, "category": category})
+    _write_products(products)
 
 
-# ── Sales helpers ────────────────────────────────────────────────────
+# ── Sales API ─────────────────────────────────────────────────────────
 
 def record_sale(session_id, item_name, qty, unit_price):
-    """Insert one line-item sale record."""
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO sales (session_id, item_name, qty, unit_price, total) VALUES (?, ?, ?, ?, ?)",
-        (session_id, item_name, qty, unit_price, qty * unit_price)
-    )
-    conn.commit()
-    conn.close()
+    """Append one sale line to sales.csv."""
+    with open(SALES_CSV, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
+        writer.writerow({
+            "session_id": session_id,
+            "item_name":  item_name,
+            "qty":        qty,
+            "unit_price": unit_price,
+            "total":      round(qty * unit_price, 2),
+            "sold_at":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
 
 
 def get_sales_history(limit=50):
-    """Return recent sales, newest first."""
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT * FROM sales ORDER BY sold_at DESC LIMIT ?", (limit,)
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    """Return the last `limit` sales rows as list of dicts (newest first)."""
+    rows = []
+    with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            rows.append(dict(row))
+    return list(reversed(rows))[:limit]
