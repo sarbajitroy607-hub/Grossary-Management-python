@@ -1,0 +1,127 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kiryana Store – Admin Panel</title>
+  <meta name="description" content="Admin panel to manage Kiryana Store inventory."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body class="app-page">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- LOGIN SCREEN -->
+  <div id="login-screen" class="full-screen-center">
+    <div class="card glass login-card">
+      <div class="login-icon">🔑</div>
+      <h1 class="login-title">Admin Login</h1>
+      <p class="login-sub">Kiryana Store Control Panel</p>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="admin-email" class="form-input" placeholder="admin@gmail.com"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="admin-password" class="form-input" placeholder="••••••"/>
+      </div>
+      <button id="login-btn" class="btn btn-primary btn-full">Login →</button>
+      <a href="/" class="back-link">← Back to Home</a>
+    </div>
+  </div>
+
+  <!-- ADMIN PANEL -->
+  <div id="admin-panel" class="hidden">
+    <nav class="navbar">
+      <a href="/" class="nav-brand">🛒 Kiryana Store</a>
+      <div class="nav-actions">
+        <span class="admin-badge">👑 Admin</span>
+        <button id="logout-btn" class="btn btn-outline">Logout</button>
+      </div>
+    </nav>
+
+    <div class="admin-layout">
+      <!-- Sidebar Tabs -->
+      <aside class="admin-sidebar glass">
+        <button class="admin-tab active" data-tab="inventory">📦 Inventory</button>
+        <button class="admin-tab" data-tab="stock">🔄 Update Stock</button>
+        <button class="admin-tab" data-tab="add-item">➕ Add Item</button>
+      </aside>
+
+      <!-- Tab Content -->
+      <main class="admin-content">
+
+        <!-- Inventory Tab -->
+        <div id="tab-inventory" class="tab-panel active">
+          <div class="section-header">
+            <h2 class="section-title">Store Inventory</h2>
+            <button id="refresh-btn" class="btn btn-outline">↻ Refresh</button>
+          </div>
+          <div id="inventory-table-wrapper">
+            <table class="admin-table" id="inventory-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Price (Rs.)</th>
+                  <th>Stock (units)</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-body">
+                <tr><td colspan="4" class="loading-row">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Update Stock Tab -->
+        <div id="tab-stock" class="tab-panel hidden">
+          <div class="section-header">
+            <h2 class="section-title">Update Stock</h2>
+          </div>
+          <div class="admin-form-card glass">
+            <div class="form-group">
+              <label class="form-label">Item Name</label>
+              <input type="text" id="stock-item" class="form-input" placeholder="e.g. rice"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">New Stock Quantity</label>
+              <input type="number" id="stock-qty" class="form-input" placeholder="e.g. 25" min="0"/>
+            </div>
+            <button id="update-stock-btn" class="btn btn-primary">Update Stock</button>
+          </div>
+        </div>
+
+        <!-- Add Item Tab -->
+        <div id="tab-add-item" class="tab-panel hidden">
+          <div class="section-header">
+            <h2 class="section-title">Add New Item</h2>
+          </div>
+          <div class="admin-form-card glass">
+            <div class="form-group">
+              <label class="form-label">Item Name</label>
+              <input type="text" id="new-item-name" class="form-input" placeholder="e.g. sugar"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Stock Quantity</label>
+              <input type="number" id="new-item-qty" class="form-input" placeholder="e.g. 20" min="0"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Price (Rs.)</label>
+              <input type="number" id="new-item-price" class="form-input" placeholder="e.g. 80" min="0" step="0.01"/>
+            </div>
+            <button id="add-item-btn" class="btn btn-primary">Add Item to Store</button>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>

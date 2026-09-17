@@ -1,0 +1,109 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kiryana Store – Shop</title>
+  <meta name="description" content="Browse and shop grocery items at Kiryana Store."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body class="app-page">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a href="/" class="nav-brand">🛒 Kiryana Store</a>
+    <div class="nav-actions">
+      <button id="cart-toggle-btn" class="btn btn-outline cart-toggle">
+        🛍️ Cart <span class="cart-count" id="cart-count">0</span>
+      </button>
+      <a href="/" class="btn btn-ghost">← Back</a>
+    </div>
+  </nav>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <div class="page-layout">
+    <!-- Items Grid -->
+    <main class="main-content">
+      <div class="section-header">
+        <h1 class="section-title">Fresh Groceries</h1>
+        <p class="section-sub">Click any item to add it to your cart</p>
+      </div>
+      <div id="items-grid" class="items-grid">
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+      </div>
+    </main>
+
+    <!-- Cart Panel -->
+    <aside id="cart-panel" class="cart-panel glass hidden">
+      <div class="cart-header">
+        <h2>🛍️ Your Cart</h2>
+        <button id="cart-close-btn" class="btn btn-ghost icon-btn">✕</button>
+      </div>
+      <div id="cart-items" class="cart-items">
+        <div class="empty-cart">
+          <div class="empty-icon">🛒</div>
+          <p>Your cart is empty</p>
+        </div>
+      </div>
+      <div id="cart-footer" class="cart-footer hidden">
+        <div class="cart-total">
+          <span>Total</span>
+          <span id="cart-total-amount" class="total-amount">Rs. 0</span>
+        </div>
+        <button id="checkout-btn" class="btn btn-primary btn-full">Checkout 🎉</button>
+        <button id="clear-cart-btn" class="btn btn-ghost btn-full">Clear Cart</button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Add to Cart Modal -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal glass">
+      <h3 id="modal-item-name" class="modal-title">Rice</h3>
+      <p id="modal-item-info" class="modal-info"></p>
+      <div class="modal-form">
+        <label class="form-label">Quantity</label>
+        <div class="qty-control">
+          <button id="qty-dec" class="qty-btn">−</button>
+          <input type="number" id="qty-input" class="qty-input" value="1" min="1"/>
+          <button id="qty-inc" class="qty-btn">+</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="modal-add" class="btn btn-primary">Add to Cart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Receipt Modal -->
+  <div id="receipt-overlay" class="modal-overlay hidden">
+    <div class="modal glass wide-modal">
+      <div class="receipt-header">
+        <div class="receipt-icon">🎉</div>
+        <h3>Order Confirmed!</h3>
+        <p>Thank you for shopping at Kiryana Store</p>
+      </div>
+      <div id="receipt-items" class="receipt-items"></div>
+      <div class="receipt-total">
+        <span>Grand Total</span>
+        <span id="receipt-grand-total" class="total-amount"></span>
+      </div>
+      <button id="receipt-close" class="btn btn-primary btn-full">Continue Shopping</button>
+    </div>
+  </div>
+
+  <script src="/static/user.js"></script>
+</body>
+</html>

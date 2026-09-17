@@ -1,0 +1,44 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kiryana Store – Welcome</title>
+  <meta name="description" content="Your trusted local grocery store. Shop fresh items at great prices."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body class="landing-page">
+  <!-- Animated background orbs -->
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="landing-container">
+    <div class="logo-section">
+      <div class="store-icon">🛒</div>
+      <h1 class="store-title">Kiryana Store</h1>
+      <p class="store-subtitle">Your neighbourhood grocery, now online</p>
+    </div>
+
+    <div class="card glass welcome-card">
+      <h2 class="welcome-heading">Continue as</h2>
+      <div class="role-buttons">
+        <a href="/user" id="btn-user" class="role-btn user-btn">
+          <span class="role-icon">🛍️</span>
+          <span class="role-label">User</span>
+          <span class="role-desc">Browse & shop items</span>
+        </a>
+        <a href="/admin" id="btn-admin" class="role-btn admin-btn">
+          <span class="role-icon">🔑</span>
+          <span class="role-label">Admin</span>
+          <span class="role-desc">Manage store inventory</span>
+        </a>
+      </div>
+    </div>
+
+    <p class="footer-note">Powered by Flask &amp; Python ⚡</p>
+  </div>
+</body>
+</html>
