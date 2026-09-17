@@ -1,127 +1,771 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Kiryana Store – Admin Panel</title>
-  <meta name="description" content="Admin panel to manage Kiryana Store inventory."/>
+  <title>GroceryPro — Inventory &amp; Stock Admin</title>
+  <meta name="description" content="Admin dashboard for managing grocery inventory, stock levels, pricing, and adding new products."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+  <style>
+    /* Admin-specific layout */
+    .admin-content-area {
+      display: flex; gap: var(--space-md); align-items: flex-start;
+    }
+    .admin-table-area { flex: 1; min-width: 0; }
+    .admin-side-panel {
+      width: 300px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: var(--space-md);
+    }
+    /* KPI cards */
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(4,1fr);
+      gap: var(--space-md); margin-bottom: var(--space-lg);
+    }
+    .kpi-card {
+      background: var(--surface-bright); border: 1px solid var(--surface-highest);
+      border-radius: var(--radius-xl); padding: var(--space-lg);
+      box-shadow: var(--shadow-sm);
+      display: flex; flex-direction: column; gap: 6px;
+      transition: box-shadow var(--transition-base);
+    }
+    .kpi-card:hover { box-shadow: var(--shadow-md); }
+    .kpi-top { display: flex; align-items: flex-start; justify-content: space-between; }
+    .kpi-icon {
+      width: 38px; height: 38px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+    }
+    .kpi-value { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; color: var(--on-surface); margin-top: 6px; }
+    .kpi-label { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--outline); }
+    .kpi-sub { font-size: 11px; color: var(--outline); }
+    .kpi-action { font-size: 11px; font-weight: 700; color: var(--error); text-decoration: underline; cursor: pointer; }
+    /* Inventory table wrapper */
+    .table-card {
+      background: var(--surface-bright); border: 1px solid var(--surface-highest);
+      border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden;
+    }
+    .table-header {
+      padding: var(--space-md) var(--space-lg);
+      border-bottom: 1px solid var(--surface-highest);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .table-title { font-size: 15px; font-weight: 800; color: var(--on-surface); }
+    .live-dot {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 700; color: var(--primary);
+    }
+    .live-dot::before {
+      content: ''; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--primary-light); animation: pulse 2s infinite;
+    }
+    .data-table td:first-child { font-weight: 600; }
+    /* Product thumbnail */
+    .prod-thumb {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: var(--surface-container);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .prod-info { display: flex; align-items: center; gap: 10px; }
+    .prod-info .prod-name { font-size: 13px; font-weight: 700; color: var(--on-surface); }
+    .prod-info .prod-sku { font-size: 10px; color: var(--outline); font-weight: 600; text-transform: uppercase; }
+    /* Stock number display */
+    .stock-num {
+      font-size: 15px; font-weight: 800; letter-spacing: -0.01em;
+    }
+    .stock-num.low   { color: var(--warning); }
+    .stock-num.out   { color: var(--error); }
+    .stock-num.ok    { color: var(--on-surface); }
+    /* Select row highlight */
+    .data-table tbody tr.selected-row { background: rgba(149,248,167,.12) !important; }
+    .select-btn {
+      padding: 4px 10px; border-radius: 8px;
+      font-size: 11px; font-weight: 700;
+      background: var(--surface-container); color: var(--on-surface-variant);
+      border: 1px solid var(--surface-highest); cursor: pointer;
+      transition: all .15s;
+    }
+    .select-btn:hover,
+    .select-btn.sel { background: var(--primary); color: white; border-color: var(--primary); }
+    /* Side panel cards */
+    .side-card {
+      background: var(--surface-bright); border: 1px solid var(--surface-highest);
+      border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden;
+    }
+    .side-card-header {
+      padding: var(--space-md) var(--space-lg);
+      border-bottom: 1px solid var(--surface-highest);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .side-card-title { font-size: 13px; font-weight: 800; color: var(--on-surface); text-transform: uppercase; letter-spacing: .04em; }
+    .side-card-body { padding: var(--space-lg); display: flex; flex-direction: column; gap: var(--space-md); }
+    /* Selected item display */
+    .selected-item-chip {
+      background: var(--surface-low); border: 1px solid var(--surface-highest);
+      border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-md);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .current-stock-num {
+      font-size: 28px; font-weight: 800; color: var(--on-surface); letter-spacing: -0.02em;
+    }
+    /* Turnover bars */
+    .turn-row { display: flex; flex-direction: column; gap: 5px; }
+    .turn-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--on-surface-variant); font-weight: 600; }
+    .turn-bar { height: 6px; background: var(--surface-high); border-radius: 100px; overflow: hidden; }
+    .turn-fill { height: 100%; border-radius: 100px; }
+    /* Pagination */
+    .table-footer {
+      padding: var(--space-md) var(--space-lg);
+      border-top: 1px solid var(--surface-highest);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .table-footer-label { font-size: 12px; color: var(--outline); font-weight: 600; }
+    @media (max-width: 1200px) {
+      .kpi-grid { grid-template-columns: repeat(2,1fr); }
+      .admin-content-area { flex-direction: column; }
+      .admin-side-panel { width: 100%; }
+    }
+    @media (max-width: 800px) {
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
 </head>
-<body class="app-page">
-  <div class="orb orb-1"></div>
-  <div class="orb orb-2"></div>
-
-  <div id="toast" class="toast"></div>
-
-  <!-- LOGIN SCREEN -->
-  <div id="login-screen" class="full-screen-center">
-    <div class="card glass login-card">
-      <div class="login-icon">🔑</div>
-      <h1 class="login-title">Admin Login</h1>
-      <p class="login-sub">Kiryana Store Control Panel</p>
-      <div class="form-group">
-        <label class="form-label">Email</label>
-        <input type="email" id="admin-email" class="form-input" placeholder="admin@gmail.com"/>
+<body>
+  <!-- ═══ HEADER ═══ -->
+  <header class="app-header">
+    <div class="header-left">
+      <a href="/" class="header-logo">
+        <div class="logo-icon"><span class="material-icons">eco</span></div>
+        GroceryPro
+      </a>
+      <span class="header-badge">OS v3.4</span>
+      <div class="store-pill">
+        <span class="material-icons">store</span>
+        Downtown Flagship · Store #104
       </div>
-      <div class="form-group">
-        <label class="form-label">Password</label>
-        <input type="password" id="admin-password" class="form-input" placeholder="••••••"/>
+    </div>
+    <div class="header-right">
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        Store Open · POS Online
       </div>
-      <button id="login-btn" class="btn btn-primary btn-full">Login →</button>
-      <a href="/" class="back-link">← Back to Home</a>
+      <div class="user-chip">
+        <div class="user-info">
+          <div class="user-name">Admin</div>
+          <div class="user-role">Store Manager · Shift AM-1</div>
+        </div>
+        <div class="avatar">A</div>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="adminLogout()">
+        <span class="material-icons" style="font-size:15px;">logout</span> Sign Out
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="app-sidebar">
+    <div>
+      <div class="sidebar-section-label">Operations Hub</div>
+      <nav>
+        <a href="/user" class="nav-link">
+          <span class="material-icons">storefront</span> Storefront &amp; Catalog
+        </a>
+        <a href="/admin" class="nav-link active">
+          <span class="material-icons">inventory_2</span> Inventory &amp; Stock Admin
+        </a>
+        <a href="/user" class="nav-link">
+          <span class="material-icons">point_of_sale</span> Checkout &amp; Register POS
+        </a>
+      </nav>
+    </div>
+    <div>
+      <div class="sidebar-section-label">Access Mode</div>
+      <div class="sidebar-role-card">
+        <div class="role-info">
+          <span class="material-icons role-icon">swap_horiz</span>
+          <div>
+            <div class="role-title">Role Switcher</div>
+            <div class="role-sub">Admin Mode Active</div>
+          </div>
+        </div>
+        <span class="material-icons" style="color:var(--outline);font-size:18px;">chevron_right</span>
+      </div>
+      <div class="sidebar-terminal-label">Terminal POS-04 · Lane 2</div>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN CONTENT ═══ -->
+  <div class="app-layout">
+    <div class="main-content">
+
+      <!-- Page Banner -->
+      <div class="page-banner mb-lg">
+        <div style="display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1;">
+          <div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--outline);margin-bottom:4px;">
+              Enterprise ERP Module / Stock Matrix &amp; Logistics
+            </div>
+            <h1 style="font-size:26px;font-weight:800;letter-spacing:-.015em;color:var(--on-surface);margin-bottom:4px;">
+              Inventory &amp; Stock Admin
+            </h1>
+            <p style="font-size:12px;color:var(--on-surface-variant);">
+              Live telemetric tracking across warehouse bays, walk-in coolers, and front-shelf allocations.
+            </p>
+          </div>
+          <div style="display:flex;gap:var(--space-sm);">
+            <button class="btn btn-secondary btn-sm">
+              <span class="material-icons">history</span> Stock Audit Log
+            </button>
+            <button class="btn btn-secondary btn-sm">
+              <span class="material-icons">upload_file</span> Bulk CSV Import
+            </button>
+            <button class="btn btn-primary" onclick="openAddModal()">
+              <span class="material-icons">add_circle</span> Add New Product
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">Total Active SKUs</div>
+            <div class="kpi-icon" style="background:rgba(149,248,167,.25);color:var(--primary);">
+              <span class="material-icons">inventory_2</span>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-total">—</div>
+          <div class="kpi-sub" id="kpi-total-sub">Loading…</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">Low Stock Warning</div>
+            <div class="kpi-icon" style="background:var(--warning-container);color:var(--warning);">
+              <span class="material-icons">warning_amber</span>
+            </div>
+          </div>
+          <div class="kpi-value value-warning" id="kpi-low">—</div>
+          <div class="kpi-sub">Requires PO Dispatch</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">Depleted / Stockout</div>
+            <div class="kpi-icon" style="background:var(--error-container);color:var(--error);">
+              <span class="material-icons">remove_shopping_cart</span>
+            </div>
+          </div>
+          <div class="kpi-value value-error" id="kpi-out">—</div>
+          <div class="kpi-sub">Active Store Disruptions</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">Total Inventory Value</div>
+            <div class="kpi-icon" style="background:var(--secondary-container);color:var(--secondary);">
+              <span class="material-icons">account_balance_wallet</span>
+            </div>
+          </div>
+          <div class="kpi-value value-success" id="kpi-value">—</div>
+          <div class="kpi-sub">Cost basis indexed</div>
+        </div>
+      </div>
+
+      <!-- Search / Filter Row -->
+      <div style="display:flex;gap:var(--space-md);margin-bottom:var(--space-md);align-items:center;">
+        <div class="search-bar" style="flex:1;">
+          <span class="material-icons">search</span>
+          <input type="text" id="admin-search" placeholder="Search SKU, product name, or category…" oninput="filterTable()"/>
+          <span style="font-size:11px;font-weight:700;color:var(--outline);background:var(--surface-container);padding:2px 6px;border-radius:4px;">⌘K</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--outline);">
+          CATEGORY:
+          <select class="form-input form-select" id="cat-filter" onchange="filterTable()" style="width:auto;padding:7px 30px 7px 10px;font-size:12px;">
+            <option value="">All Departments</option>
+            <option value="Staples">Staples</option>
+            <option value="Oils">Oils</option>
+            <option value="Cleaning">Cleaning</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--outline);">
+          STATUS:
+          <select class="form-input form-select" id="status-filter" onchange="filterTable()" style="width:auto;padding:7px 30px 7px 10px;font-size:12px;">
+            <option value="">All Levels</option>
+            <option value="ok">Healthy</option>
+            <option value="low">Low Alert</option>
+            <option value="out">Out of Stock</option>
+          </select>
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="loadItems()">
+          <span class="material-icons" style="font-size:16px;">refresh</span>
+        </button>
+      </div>
+
+      <!-- Table + Side Panel -->
+      <div class="admin-content-area">
+        <!-- Inventory Table -->
+        <div class="admin-table-area">
+          <div class="table-card">
+            <div class="table-header">
+              <div>
+                <div class="table-title">Catalog Realtime Stock Register</div>
+                <div style="font-size:11px;color:var(--outline);margin-top:2px;"><span id="table-count">—</span> SKUs Listed</div>
+              </div>
+              <div class="live-dot">Live Sync Active</div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="data-table" id="inventory-table">
+                <thead>
+                  <tr>
+                    <th>SKU / Item</th>
+                    <th>Category</th>
+                    <th>Unit Price</th>
+                    <th>In Stock</th>
+                    <th>Min Threshold</th>
+                    <th>Status</th>
+                    <th>Last Restock</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="inventory-body">
+                  <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--outline);">Loading inventory…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-footer">
+              <span class="table-footer-label">Displaying <span id="display-range">—</span> of <span id="total-items">—</span> store items</span>
+              <div class="pagination" id="pagination"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Side Panel -->
+        <div class="admin-side-panel">
+          <!-- Stock Adjustment -->
+          <div class="side-card" id="adjustment-card">
+            <div class="side-card-header">
+              <div>
+                <div style="font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--outline);">Operational Console</div>
+                <div class="side-card-title">Inventory Quantity Adjustment</div>
+              </div>
+              <span class="material-icons" style="color:var(--outline);font-size:18px;">tune</span>
+            </div>
+            <div class="side-card-body">
+              <div id="selected-item-display">
+                <div style="background:var(--surface-low);border:1px solid var(--surface-highest);border-radius:var(--radius-lg);padding:var(--space-md);">
+                  <div style="font-size:11px;font-weight:700;color:var(--outline);margin-bottom:4px;">No Item Selected</div>
+                  <div style="font-size:12px;color:var(--on-surface-variant);">Click a row in the table to select an item for adjustment.</div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">New Stock Quantity</label>
+                <input class="form-input" type="number" id="adj-qty" placeholder="Enter new total quantity" min="0"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Adjustment Reason Code</label>
+                <select class="form-input form-select" id="adj-reason">
+                  <option>Truck Delivery Received (Vendor PO)</option>
+                  <option>Stock Count Correction</option>
+                  <option>Damaged / Spoiled Write-off</option>
+                  <option>Return to Vendor</option>
+                  <option>Supervisor Manual Override</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Supervisor Memo / Reference</label>
+                <input class="form-input" type="text" id="adj-memo" placeholder="e.g., Manifest #BOL-8842, Bay 3"/>
+              </div>
+              <div style="background:var(--surface-low);border:1px solid var(--surface-highest);border-radius:var(--radius-lg);padding:var(--space-sm) var(--space-md);display:flex;justify-content:space-between;">
+                <span style="font-size:12px;color:var(--outline);font-weight:600;">Projected New Total:</span>
+                <span style="font-size:14px;font-weight:800;color:var(--on-surface);" id="projected-label">—</span>
+              </div>
+              <button class="btn btn-primary btn-full" id="commit-btn" onclick="commitStock()" disabled>
+                <span class="material-icons">check_circle</span> Commit Stock Change
+              </button>
+            </div>
+          </div>
+
+          <!-- Perishables Turnover -->
+          <div class="side-card">
+            <div class="side-card-header">
+              <div class="side-card-title">Perishables &amp; Turnover</div>
+              <span class="material-icons" style="color:var(--outline);font-size:18px;">bar_chart</span>
+            </div>
+            <div class="side-card-body">
+              <div class="turn-row">
+                <div class="turn-label">
+                  <span>Produce Turn Cycle</span>
+                  <span style="font-weight:700;color:var(--on-surface);">2.4 Days avg</span>
+                </div>
+                <div class="turn-bar">
+                  <div class="turn-fill" style="width:72%;background:var(--primary);"></div>
+                </div>
+              </div>
+              <div class="turn-row">
+                <div class="turn-label">
+                  <span>Bakery Expiration Window</span>
+                  <span style="font-weight:700;color:var(--warning);">8 hrs remaining</span>
+                </div>
+                <div class="turn-bar">
+                  <div class="turn-fill" style="width:30%;background:var(--warning);"></div>
+                </div>
+              </div>
+              <div class="turn-row">
+                <div class="turn-label">
+                  <span>Dairy Cold-Chain</span>
+                  <span style="font-weight:700;color:var(--primary);">36.4°F · OK</span>
+                </div>
+                <div class="turn-bar">
+                  <div class="turn-fill" style="width:88%;background:var(--primary-fixed-dim);"></div>
+                </div>
+              </div>
+              <div class="turn-row">
+                <div class="turn-label">
+                  <span>Shelf Health Score</span>
+                  <span style="font-weight:700;color:var(--primary);">99.2%</span>
+                </div>
+                <div class="turn-bar">
+                  <div class="turn-fill" style="width:99%;background:linear-gradient(to right,var(--primary-fixed-dim),var(--primary));"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- ADMIN PANEL -->
-  <div id="admin-panel" class="hidden">
-    <nav class="navbar">
-      <a href="/" class="nav-brand">🛒 Kiryana Store</a>
-      <div class="nav-actions">
-        <span class="admin-badge">👑 Admin</span>
-        <button id="logout-btn" class="btn btn-outline">Logout</button>
+  <!-- ═══ ADD PRODUCT MODAL ═══ -->
+  <div class="modal-overlay" id="add-modal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeAddModal()"><span class="material-icons" style="font-size:18px;">close</span></button>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <div style="width:42px;height:42px;border-radius:10px;background:rgba(149,248,167,.35);display:flex;align-items:center;justify-content:center;">
+          <span class="material-icons" style="color:var(--primary);font-size:22px;">add_box</span>
+        </div>
+        <div>
+          <div class="modal-title" style="margin-bottom:0;">Add New Product</div>
+          <div style="font-size:12px;color:var(--outline);">Register a new SKU in the store catalog</div>
+        </div>
       </div>
-    </nav>
-
-    <div class="admin-layout">
-      <!-- Sidebar Tabs -->
-      <aside class="admin-sidebar glass">
-        <button class="admin-tab active" data-tab="inventory">📦 Inventory</button>
-        <button class="admin-tab" data-tab="stock">🔄 Update Stock</button>
-        <button class="admin-tab" data-tab="add-item">➕ Add Item</button>
-      </aside>
-
-      <!-- Tab Content -->
-      <main class="admin-content">
-
-        <!-- Inventory Tab -->
-        <div id="tab-inventory" class="tab-panel active">
-          <div class="section-header">
-            <h2 class="section-title">Store Inventory</h2>
-            <button id="refresh-btn" class="btn btn-outline">↻ Refresh</button>
-          </div>
-          <div id="inventory-table-wrapper">
-            <table class="admin-table" id="inventory-table">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Price (Rs.)</th>
-                  <th>Stock (units)</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="inventory-body">
-                <tr><td colspan="4" class="loading-row">Loading...</td></tr>
-              </tbody>
-            </table>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="form-group">
+          <label class="form-label">Product Name <span style="color:var(--error);">*</span></label>
+          <div class="form-input-icon" style="position:relative;">
+            <span class="material-icons" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:17px;color:var(--outline);">label</span>
+            <input class="form-input" type="text" id="new-item-name" placeholder="e.g., Basmati Rice" style="padding-left:40px;"/>
           </div>
         </div>
-
-        <!-- Update Stock Tab -->
-        <div id="tab-stock" class="tab-panel hidden">
-          <div class="section-header">
-            <h2 class="section-title">Update Stock</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Initial Stock (units) <span style="color:var(--error);">*</span></label>
+            <div class="form-input-icon" style="position:relative;">
+              <span class="material-icons" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:17px;color:var(--outline);">inventory</span>
+              <input class="form-input" type="number" id="new-item-qty" placeholder="0" min="0" style="padding-left:40px;"/>
+            </div>
           </div>
-          <div class="admin-form-card glass">
-            <div class="form-group">
-              <label class="form-label">Item Name</label>
-              <input type="text" id="stock-item" class="form-input" placeholder="e.g. rice"/>
+          <div class="form-group">
+            <label class="form-label">Unit Price (₹) <span style="color:var(--error);">*</span></label>
+            <div class="form-input-icon" style="position:relative;">
+              <span class="material-icons" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:17px;color:var(--outline);">currency_rupee</span>
+              <input class="form-input" type="number" id="new-item-price" placeholder="0.00" min="0" step="0.01" style="padding-left:40px;"/>
             </div>
-            <div class="form-group">
-              <label class="form-label">New Stock Quantity</label>
-              <input type="number" id="stock-qty" class="form-input" placeholder="e.g. 25" min="0"/>
-            </div>
-            <button id="update-stock-btn" class="btn btn-primary">Update Stock</button>
           </div>
         </div>
-
-        <!-- Add Item Tab -->
-        <div id="tab-add-item" class="tab-panel hidden">
-          <div class="section-header">
-            <h2 class="section-title">Add New Item</h2>
-          </div>
-          <div class="admin-form-card glass">
-            <div class="form-group">
-              <label class="form-label">Item Name</label>
-              <input type="text" id="new-item-name" class="form-input" placeholder="e.g. sugar"/>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Stock Quantity</label>
-              <input type="number" id="new-item-qty" class="form-input" placeholder="e.g. 20" min="0"/>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Price (Rs.)</label>
-              <input type="number" id="new-item-price" class="form-input" placeholder="e.g. 80" min="0" step="0.01"/>
-            </div>
-            <button id="add-item-btn" class="btn btn-primary">Add Item to Store</button>
-          </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-input form-select" id="new-item-cat">
+            <option>Staples</option>
+            <option>Oils</option>
+            <option>Cleaning</option>
+            <option>Beverages</option>
+            <option>Dairy</option>
+            <option>Other</option>
+          </select>
         </div>
-
-      </main>
+        <div id="add-error" class="error-msg hidden" style="background:var(--error-container);border:1px solid #f9a8a8;border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;color:#7f1d1d;display:flex;align-items:center;gap:6px;">
+          <span class="material-icons" style="font-size:16px;">error_outline</span>
+          <span id="add-error-text"></span>
+        </div>
+        <button class="btn btn-primary btn-full btn-lg" id="add-item-btn" onclick="addItem()">
+          <span class="material-icons">add_circle</span> Add to Store Catalog
+        </button>
+      </div>
     </div>
   </div>
 
-  <script src="/static/admin.js"></script>
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script>
+    const EMOJI_MAP = { rice:'🌾', wheat:'🌿', flour:'🍞', oil:'🫙', daal:'🫘', soap:'🧼', surf:'🧺' };
+    const CAT_MAP = { rice:'Staples', wheat:'Staples', flour:'Staples', daal:'Staples', oil:'Oils', soap:'Cleaning', surf:'Cleaning' };
+    const MIN_THRESHOLD = 3;
+    const SKU_MAP = {};
+
+    let allItems = [];
+    let filteredItems = [];
+    let selectedItem = null;
+    let currentPage = 1;
+    const PAGE_SIZE = 8;
+
+    /* ── Load items ── */
+    async function loadItems() {
+      const res = await fetch('/api/items');
+      allItems = await res.json();
+      // Generate stable SKUs
+      allItems.forEach((item, i) => {
+        if (!SKU_MAP[item.name]) {
+          SKU_MAP[item.name] = `SKU-${(i+1080)}`;
+        }
+      });
+      updateKPIs();
+      filterTable();
+    }
+
+    /* ── KPI update ── */
+    function updateKPIs() {
+      const total = allItems.length;
+      const low = allItems.filter(i => i.stock > 0 && i.stock <= MIN_THRESHOLD).length;
+      const out = allItems.filter(i => i.stock === 0).length;
+      const value = allItems.reduce((s, i) => s + i.stock * i.price, 0);
+
+      document.getElementById('kpi-total').textContent = total;
+      document.getElementById('kpi-total-sub').textContent = `+${total} this cycle · 99.2% shelf health`;
+      document.getElementById('kpi-low').textContent = low;
+      document.getElementById('kpi-out').textContent = out;
+      document.getElementById('kpi-value').textContent = `₹${value.toFixed(2)}`;
+      document.getElementById('total-items').textContent = total;
+    }
+
+    /* ── Filter table ── */
+    function filterTable() {
+      const q = document.getElementById('admin-search').value.trim().toLowerCase();
+      const cat = document.getElementById('cat-filter').value;
+      const status = document.getElementById('status-filter').value;
+
+      filteredItems = allItems.filter(item => {
+        const matchQ = !q || item.name.includes(q) || (SKU_MAP[item.name]||'').toLowerCase().includes(q);
+        const matchCat = !cat || (CAT_MAP[item.name]||'Other') === cat;
+        const st = getStatus(item);
+        const matchStatus = !status || st === status;
+        return matchQ && matchCat && matchStatus;
+      });
+      currentPage = 1;
+      renderTable();
+    }
+
+    function getStatus(item) {
+      if (item.stock === 0) return 'out';
+      if (item.stock <= MIN_THRESHOLD) return 'low';
+      return 'ok';
+    }
+
+    /* ── Render table ── */
+    function renderTable() {
+      const body = document.getElementById('inventory-body');
+      const total = filteredItems.length;
+      document.getElementById('table-count').textContent = total;
+
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end = Math.min(start + PAGE_SIZE, total);
+      const pageItems = filteredItems.slice(start, end);
+
+      document.getElementById('display-range').textContent = total === 0 ? '0' : `${start+1}–${end}`;
+
+      if (!pageItems.length) {
+        body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--outline);">
+          <span class="material-icons" style="font-size:28px;opacity:.4;display:block;margin:0 auto 8px;">search_off</span>
+          No items match your filters.
+        </td></tr>`;
+        renderPagination(0);
+        return;
+      }
+
+      body.innerHTML = pageItems.map(item => {
+        const st = getStatus(item);
+        const stLabels = { ok:'HEALTHY', low:'LOW ALERT', out:'OUT OF STOCK' };
+        const stBadges = { ok:'badge-success', low:'badge-warning', out:'badge-error' };
+        const emoji = EMOJI_MAP[item.name] || '🛒';
+        const sku = SKU_MAP[item.name] || '—';
+        const cat = CAT_MAP[item.name] || 'Other';
+        const stockClass = { ok:'ok', low:'low', out:'out' }[st];
+        const restockDates = { rice:'Today, 06:15 AM', wheat:'Yesterday, 10:00 AM', flour:'Yesterday, 04:30 AM', oil:'2 days ago', daal:'Oct 28, 08:00 AM', soap:'Oct 27, 02:20 PM', surf:'Oct 26, 09:00 AM' };
+
+        return `<tr id="row-${item.name}" onclick="selectItem('${item.name}')" style="cursor:pointer;" ${selectedItem===item.name?'class="selected-row"':''}>
+          <td>
+            <div class="prod-info">
+              <div class="prod-thumb">${emoji}</div>
+              <div>
+                <div class="prod-name">${capitalize(item.name)}</div>
+                <div class="prod-sku">${sku} · PLU #${4000+allItems.indexOf(item)}</div>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge badge-neutral">${cat}</span></td>
+          <td style="font-weight:700;">₹${item.price.toFixed(2)}<span style="font-size:10px;font-weight:500;color:var(--outline);">/unit</span></td>
+          <td><span class="stock-num ${stockClass}">${item.stock}</span></td>
+          <td style="color:var(--outline);font-size:12px;">${MIN_THRESHOLD}</td>
+          <td><span class="badge ${stBadges[st]}"><span class="badge-dot badge-dot-${st==='ok'?'success':st==='low'?'warning':'error'}"></span>${stLabels[st]}</span></td>
+          <td style="font-size:11px;color:var(--outline);">${restockDates[item.name]||'N/A'}</td>
+          <td>
+            <button class="select-btn ${selectedItem===item.name?'sel':''}" onclick="event.stopPropagation();selectItem('${item.name}')">
+              ${selectedItem===item.name ? 'Selected' : 'Adjust'}
+            </button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      renderPagination(total);
+    }
+
+    /* ── Pagination ── */
+    function renderPagination(total) {
+      const pages = Math.ceil(total / PAGE_SIZE);
+      const el = document.getElementById('pagination');
+      if (pages <= 1) { el.innerHTML = ''; return; }
+      let html = '';
+      if (currentPage > 1) html += `<button class="page-btn" onclick="goPage(${currentPage-1})">‹</button>`;
+      for (let i = 1; i <= pages; i++) {
+        if (i === 1 || i === pages || Math.abs(i - currentPage) <= 1) {
+          html += `<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+        } else if (i === 2 || i === pages - 1) {
+          html += `<span class="page-btn" style="pointer-events:none;border:none;background:none;">…</span>`;
+        }
+      }
+      if (currentPage < pages) html += `<button class="page-btn" onclick="goPage(${currentPage+1})">›</button>`;
+      el.innerHTML = html;
+    }
+    function goPage(p) { currentPage = p; renderTable(); }
+
+    /* ── Select item ── */
+    function selectItem(name) {
+      selectedItem = name;
+      const item = allItems.find(i => i.name === name);
+      renderTable();
+      if (!item) return;
+      const emoji = EMOJI_MAP[item.name] || '🛒';
+      document.getElementById('selected-item-display').innerHTML = `
+        <div class="selected-item-chip">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--outline);">${SKU_MAP[name]||'—'}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--on-surface);">${emoji} ${capitalize(name)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:10px;font-weight:700;color:var(--outline);">Current Stock</div>
+            <div class="current-stock-num">${item.stock}</div>
+          </div>
+        </div>`;
+      document.getElementById('adj-qty').value = item.stock;
+      document.getElementById('projected-label').textContent = `${item.stock} Units`;
+      document.getElementById('commit-btn').disabled = false;
+      document.getElementById('adj-qty').oninput = function() {
+        document.getElementById('projected-label').textContent = `${this.value||0} Units`;
+      };
+    }
+
+    /* ── Commit stock ── */
+    async function commitStock() {
+      if (!selectedItem) return;
+      const qty = parseInt(document.getElementById('adj-qty').value);
+      if (isNaN(qty) || qty < 0) {
+        showToast('Enter a valid quantity.', 'error');
+        return;
+      }
+      const btn = document.getElementById('commit-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite">sync</span> Committing…';
+
+      const res = await fetch('/api/admin/stock', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({item: selectedItem, qty})
+      });
+      const data = await res.json();
+
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-icons">check_circle</span> Commit Stock Change';
+
+      if (data.success) {
+        showToast(data.message, 'success');
+        await loadItems();
+        selectItem(selectedItem);
+      } else {
+        showToast(data.message, 'error');
+      }
+    }
+
+    /* ── Add item ── */
+    function openAddModal() { document.getElementById('add-modal').classList.add('open'); }
+    function closeAddModal() { document.getElementById('add-modal').classList.remove('open'); }
+
+    async function addItem() {
+      const name = document.getElementById('new-item-name').value.trim().toLowerCase();
+      const qty = parseInt(document.getElementById('new-item-qty').value);
+      const price = parseFloat(document.getElementById('new-item-price').value);
+      const errBox = document.getElementById('add-error');
+      const errText = document.getElementById('add-error-text');
+      errBox.classList.add('hidden');
+
+      if (!name) { errText.textContent = 'Product name is required.'; errBox.classList.remove('hidden'); return; }
+      if (isNaN(qty) || qty < 0) { errText.textContent = 'Enter a valid stock quantity.'; errBox.classList.remove('hidden'); return; }
+      if (isNaN(price) || price <= 0) { errText.textContent = 'Enter a valid price.'; errBox.classList.remove('hidden'); return; }
+
+      const btn = document.getElementById('add-item-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite">sync</span> Adding…';
+
+      const res = await fetch('/api/admin/add_item', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({item: name, qty, price})
+      });
+      const data = await res.json();
+
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-icons">add_circle</span> Add to Store Catalog';
+
+      if (data.success) {
+        showToast(data.message, 'success');
+        closeAddModal();
+        document.getElementById('new-item-name').value = '';
+        document.getElementById('new-item-qty').value = '';
+        document.getElementById('new-item-price').value = '';
+        await loadItems();
+      } else {
+        errText.textContent = data.message;
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    /* ── Logout ── */
+    async function adminLogout() {
+      await fetch('/api/admin/logout', {method:'POST'});
+      window.location.href = '/';
+    }
+
+    /* ── Toast ── */
+    function showToast(msg, type='success') {
+      const icons = { success:'check_circle', error:'error_outline', warning:'warning_amber' };
+      const container = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.innerHTML = `<span class="material-icons">${icons[type]||'info'}</span>${msg}`;
+      container.appendChild(t);
+      setTimeout(() => { t.classList.add('removing'); setTimeout(() => t.remove(), 220); }, 3500);
+    }
+
+    function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+    /* ── Init ── */
+    loadItems();
+  </script>
+
+  <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-msg { display: flex; align-items: center; }
+    .error-msg.hidden { display: none !important; }
+  </style>
 </body>
 </html>

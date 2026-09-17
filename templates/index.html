@@ -1,44 +1,487 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Kiryana Store – Welcome</title>
-  <meta name="description" content="Your trusted local grocery store. Shop fresh items at great prices."/>
+  <title>GroceryPro — Sign In</title>
+  <meta name="description" content="GroceryPro secure terminal authentication. Unified checkout and stock gateway for grocery store management."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+  <style>
+    body {
+      background: #eef3fb;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px;
+    }
+    .login-wrapper {
+      display: flex; width: 100%; max-width: 900px;
+      border-radius: 24px; overflow: hidden;
+      box-shadow: 0 20px 60px rgba(11,28,48,0.14), 0 4px 16px rgba(11,28,48,0.06);
+      background: white;
+      min-height: 560px;
+    }
+    /* ─── Left Panel ─── */
+    .login-left {
+      width: 340px; flex-shrink: 0;
+      background: linear-gradient(160deg, #f0f7f2 0%, #e3f0e8 100%);
+      padding: 40px 32px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      border-right: 1px solid #d5e8da;
+      position: relative; overflow: hidden;
+    }
+    .login-left::before {
+      content: ''; position: absolute;
+      bottom: -60px; right: -60px;
+      width: 220px; height: 220px;
+      background: var(--primary-fixed);
+      border-radius: 50%; opacity: 0.25;
+    }
+    .login-left::after {
+      content: ''; position: absolute;
+      top: -40px; left: -40px;
+      width: 160px; height: 160px;
+      background: var(--primary-fixed);
+      border-radius: 50%; opacity: 0.15;
+    }
+    .left-content { position: relative; z-index: 1; }
+    .brand-lockup {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 28px;
+    }
+    .brand-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      background: var(--primary); display: flex; align-items: center; justify-content: center;
+    }
+    .brand-icon .material-icons { color: white; font-size: 22px; }
+    .brand-name { font-size: 20px; font-weight: 800; color: var(--primary); letter-spacing: -0.02em; }
+    .brand-version {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+      text-transform: uppercase; background: var(--primary-fixed);
+      color: var(--primary-dark); padding: 2px 8px; border-radius: 100px;
+    }
+    .node-tag {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--primary); background: rgba(0,109,48,.12);
+      padding: 3px 10px; border-radius: 100px; display: inline-block; margin-bottom: 10px;
+    }
+    .left-headline { font-size: 22px; font-weight: 800; color: #0b1c30; line-height: 1.25; margin-bottom: 10px; letter-spacing: -0.015em; }
+    .left-desc { font-size: 13px; color: var(--on-surface-variant); line-height: 1.6; }
+    .hw-cards { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+    .hw-card {
+      background: white; border: 1px solid #d5e8da;
+      border-radius: 12px; padding: 12px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .hw-card .hw-icon { width: 32px; height: 32px; border-radius: 8px; background: #e8f5ec; display: flex; align-items: center; justify-content: center; }
+    .hw-card .hw-icon .material-icons { font-size: 18px; color: var(--primary); }
+    .hw-card .hw-title { font-size: 12px; font-weight: 700; color: #0b1c30; }
+    .hw-card .hw-sub { font-size: 11px; color: var(--outline); }
+    .sync-card {
+      background: white; border: 1px solid #d5e8da; border-radius: 12px; padding: 14px 16px;
+    }
+    .sync-label { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--outline); margin-bottom: 8px; }
+    .sync-bar {
+      height: 36px; position: relative;
+    }
+    .sync-svg { width: 100%; height: 100%; }
+    .sync-footer { display: flex; justify-content: space-between; margin-top: 6px; }
+    .sync-stat { font-size: 10px; color: var(--outline); font-weight: 600; }
+    .sync-dot { display: inline-flex; align-items: center; gap: 5px; }
+    .sync-dot::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--primary-light); animation: pulse 2s infinite; }
+    /* ─── Right Panel ─── */
+    .login-right {
+      flex: 1; padding: 48px 40px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .security-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .security-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--primary); }
+    .pci-badge {
+      display: flex; align-items: center; gap: 5px;
+      background: #f0f7f2; border: 1px solid #d5e8da;
+      padding: 3px 10px; border-radius: 100px;
+      font-size: 10px; font-weight: 700; color: var(--primary-dark);
+    }
+    .pci-badge .material-icons { font-size: 13px; }
+    .login-title { font-size: 28px; font-weight: 800; color: #0b1c30; letter-spacing: -0.02em; margin-bottom: 4px; }
+    .login-subtitle { font-size: 13px; color: var(--outline); margin-bottom: 28px; }
+    /* Role selector */
+    .role-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--outline); margin-bottom: 10px; }
+    .role-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 24px; }
+    .role-card {
+      border: 2px solid var(--surface-highest);
+      border-radius: 14px; padding: 14px 10px;
+      cursor: pointer; text-align: center;
+      transition: all 0.2s ease; background: var(--surface-low);
+    }
+    .role-card:hover { border-color: var(--primary-fixed-dim); background: #f0f7f2; }
+    .role-card.selected { border-color: var(--primary); background: #f0f7f2; }
+    .role-card .role-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--outline); margin: 0 auto 8px; }
+    .role-card.selected .role-dot { background: var(--primary-light); }
+    .role-card .role-icon { font-size: 22px; color: var(--on-surface-variant); margin-bottom: 6px; }
+    .role-card.selected .role-icon { color: var(--primary); }
+    .role-card .role-name { font-size: 13px; font-weight: 700; color: var(--on-surface); }
+    .role-card .role-desc { font-size: 10px; color: var(--outline); margin-top: 2px; line-height: 1.4; }
+    /* Form fields */
+    .field-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
+    .field-label { font-size: 12px; font-weight: 700; color: var(--on-surface-variant); }
+    .field-input-wrap { position: relative; }
+    .field-input-wrap .field-ico {
+      position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+      font-size: 17px; color: var(--outline); pointer-events: none;
+    }
+    .field-input {
+      width: 100%; background: var(--surface-low);
+      border: 1.5px solid var(--surface-highest);
+      border-radius: 12px; padding: 11px 14px 11px 40px;
+      font-size: 14px; font-weight: 500; color: var(--on-surface);
+      outline: none; font-family: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0,109,48,.12);
+      background: white;
+    }
+    .field-action { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .shift-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .retain-label { font-size: 12px; color: var(--on-surface-variant); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .toggle-switch { position: relative; width: 36px; height: 20px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; background: var(--outline-variant); border-radius: 100px;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .slider::after {
+      content: ''; position: absolute; width: 14px; height: 14px;
+      background: white; border-radius: 50%; left: 3px; top: 3px;
+      transition: transform 0.2s;
+    }
+    .toggle-switch input:checked + .slider { background: var(--primary); }
+    .toggle-switch input:checked + .slider::after { transform: translateX(16px); }
+    .sign-in-btn {
+      width: 100%; padding: 14px; border-radius: 14px;
+      background: var(--primary); color: white; border: none;
+      font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      box-shadow: 0 4px 16px rgba(0,109,48,.35);
+      transition: all 0.18s ease; margin-bottom: 20px;
+    }
+    .sign-in-btn:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,109,48,.4); }
+    .sign-in-btn:active { transform: translateY(0); }
+    .sign-in-btn .material-icons { font-size: 19px; }
+    /* Demo autofill */
+    .demo-row {
+      background: var(--surface-low); border: 1px solid var(--surface-highest);
+      border-radius: 12px; padding: 12px 16px;
+    }
+    .demo-row-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .demo-row-header .material-icons { font-size: 15px; color: var(--warning); }
+    .demo-row-title { font-size: 12px; font-weight: 700; color: var(--on-surface); }
+    .demo-row-sub { font-size: 11px; color: var(--outline); }
+    .demo-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .demo-pill {
+      display: flex; align-items: center; gap: 4px;
+      background: white; border: 1px solid var(--surface-highest);
+      padding: 4px 10px; border-radius: 100px;
+      font-size: 11px; font-weight: 700; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .demo-pill:hover { background: var(--surface-container); border-color: var(--primary-fixed-dim); }
+    .demo-pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .demo-pill .dot-admin { background: var(--primary); }
+    .demo-pill .dot-cashier { background: var(--secondary); }
+    .demo-pill .dot-kiosk { background: var(--outline-variant); }
+    /* Error message */
+    .error-msg {
+      background: var(--error-container); border: 1px solid #f9a8a8;
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 12px; font-weight: 600; color: #7f1d1d;
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 14px;
+    }
+    .error-msg .material-icons { font-size: 16px; }
+    /* Link style */
+    .link { color: var(--primary); font-weight: 700; cursor: pointer; }
+    .link:hover { text-decoration: underline; }
+    @media (max-width: 720px) {
+      .login-left { display: none; }
+      .login-right { padding: 32px 24px; }
+    }
+  </style>
 </head>
-<body class="landing-page">
-  <!-- Animated background orbs -->
-  <div class="orb orb-1"></div>
-  <div class="orb orb-2"></div>
-  <div class="orb orb-3"></div>
-
-  <div class="landing-container">
-    <div class="logo-section">
-      <div class="store-icon">🛒</div>
-      <h1 class="store-title">Kiryana Store</h1>
-      <p class="store-subtitle">Your neighbourhood grocery, now online</p>
-    </div>
-
-    <div class="card glass welcome-card">
-      <h2 class="welcome-heading">Continue as</h2>
-      <div class="role-buttons">
-        <a href="/user" id="btn-user" class="role-btn user-btn">
-          <span class="role-icon">🛍️</span>
-          <span class="role-label">User</span>
-          <span class="role-desc">Browse & shop items</span>
-        </a>
-        <a href="/admin" id="btn-admin" class="role-btn admin-btn">
-          <span class="role-icon">🔑</span>
-          <span class="role-label">Admin</span>
-          <span class="role-desc">Manage store inventory</span>
-        </a>
+<body>
+  <div class="login-wrapper">
+    <!-- ── Left Panel ── -->
+    <div class="login-left">
+      <div class="left-content">
+        <div class="brand-lockup">
+          <div class="brand-icon"><span class="material-icons">eco</span></div>
+          <span class="brand-name">GroceryPro</span>
+          <span class="brand-version">V4.8 LTS</span>
+        </div>
+        <div>
+          <div class="node-tag">Node Identity Validated</div>
+          <h2 class="left-headline">Unified Checkout &amp; Stock Gateway</h2>
+          <p class="left-desc">Secure multi-tier workstation access. Connects front-line scales, barcoding, and back-of-house ERP manifests instantly.</p>
+        </div>
+        <div class="hw-cards">
+          <div class="hw-card">
+            <div class="hw-icon"><span class="material-icons">scale</span></div>
+            <div>
+              <div class="hw-title">Weighing Scale</div>
+              <div class="hw-sub">Scale Online · Calibrated · 0.000 kg</div>
+            </div>
+          </div>
+          <div class="hw-card">
+            <div class="hw-icon"><span class="material-icons">receipt_long</span></div>
+            <div>
+              <div class="hw-title">Receipt Printer</div>
+              <div class="hw-sub">80mm · Feed Ready · Connected</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="left-content" style="position:relative;z-index:1;">
+        <div class="sync-card">
+          <div class="sync-label"><span class="sync-dot">12ms Cloud Mirror</span></div>
+          <div class="sync-bar">
+            <svg class="sync-svg" viewBox="0 0 200 36" preserveAspectRatio="none">
+              <polyline points="0,28 20,20 40,24 60,14 80,18 100,10 120,16 140,8 160,14 180,6 200,12"
+                fill="none" stroke="#15803d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+              <polyline points="0,28 20,20 40,24 60,14 80,18 100,10 120,16 140,8 160,14 180,6 200,12 200,36 0,36"
+                fill="url(#syncGrad)" stroke="none" opacity="0.15"/>
+              <defs>
+                <linearGradient id="syncGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#15803d"/>
+                  <stop offset="100%" stop-color="#15803d" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div class="sync-footer">
+            <span class="sync-stat">Encrypted POS Lane #04</span>
+            <span class="sync-stat">BUILD-ID: TK-9022</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <p class="footer-note">Powered by Flask &amp; Python ⚡</p>
+    <!-- ── Right Panel ── -->
+    <div class="login-right">
+      <div class="security-row">
+        <span class="security-tag">Security Challenge</span>
+        <div class="pci-badge"><span class="material-icons">lock</span> PCI-DSS 4.0 Compliant</div>
+      </div>
+      <h1 class="login-title">Terminal Authentication</h1>
+      <p class="login-subtitle">Select your role to access the register &amp; inventory console.</p>
+
+      <div class="role-section-label">Operational Mode</div>
+      <div class="role-cards">
+        <div class="role-card" id="role-admin" onclick="selectRole('admin')">
+          <div class="role-dot"></div>
+          <div class="material-icons role-icon">admin_panel_settings</div>
+          <div class="role-name">Admin</div>
+          <div class="role-desc">Pricing, stock &amp; ledger</div>
+        </div>
+        <div class="role-card" id="role-cashier" onclick="selectRole('cashier')">
+          <div class="role-dot"></div>
+          <div class="material-icons role-icon">point_of_sale</div>
+          <div class="role-name">Cashier POS</div>
+          <div class="role-desc">Barcode, scale &amp; quick-tape</div>
+        </div>
+        <div class="role-card" id="role-user" onclick="selectRole('user')">
+          <div class="role-dot"></div>
+          <div class="material-icons role-icon">shopping_cart</div>
+          <div class="role-name">Customer</div>
+          <div class="role-desc">Shopper order terminal</div>
+        </div>
+      </div>
+
+      <div id="error-box" class="error-msg hidden">
+        <span class="material-icons">error_outline</span>
+        <span id="error-text">Invalid credentials. Please try again.</span>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="email-input">Employee ID or Email</label>
+        <div class="field-input-wrap">
+          <span class="material-icons field-ico">badge</span>
+          <input id="email-input" class="field-input" type="email" placeholder="admin@gmail.com" autocomplete="username"/>
+        </div>
+      </div>
+
+      <div id="password-section" class="field-group hidden">
+        <div class="field-action">
+          <label class="field-label" for="pass-input">Security Key / Terminal PIN</label>
+          <span class="link text-xs" onclick="togglePass()">Supervisor Override?</span>
+        </div>
+        <div class="field-input-wrap">
+          <span class="material-icons field-ico">pin</span>
+          <input id="pass-input" class="field-input" type="password" placeholder="••••••" autocomplete="current-password"/>
+          <span class="material-icons" id="pass-toggle-ico"
+            onclick="togglePass()"
+            style="position:absolute;right:13px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:18px;color:var(--outline);">
+            visibility
+          </span>
+        </div>
+      </div>
+
+      <div class="shift-row" id="shift-section" style="display:none;">
+        <div class="form-input-icon" style="flex:1;position:relative;">
+          <span class="material-icons" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:17px;color:var(--outline);">schedule</span>
+          <select class="field-input form-select" style="padding-left:40px;">
+            <option>Morning Shift (07:00 – 15:30)</option>
+            <option>Afternoon Shift (15:30 – 23:00)</option>
+            <option>Night Shift (23:00 – 07:00)</option>
+          </select>
+        </div>
+        <label class="retain-label">
+          <label class="toggle-switch">
+            <input type="checkbox" checked/>
+            <span class="slider"></span>
+          </label>
+          Retain hardware pairing
+        </label>
+      </div>
+
+      <button class="sign-in-btn" id="sign-in-btn" onclick="handleLogin()">
+        <span class="material-icons">login</span>
+        Sign In to Console
+      </button>
+
+      <div class="demo-row">
+        <div class="demo-row-header">
+          <span class="material-icons">bolt</span>
+          <div>
+            <div class="demo-row-title">Quick Demo Autofill</div>
+            <div class="demo-row-sub">Click a credential pill to populate a test profile</div>
+          </div>
+        </div>
+        <div class="demo-pills">
+          <div class="demo-pill" onclick="fillAdmin()">
+            <span class="dot dot-admin"></span> Fill Admin (Full)
+          </div>
+          <div class="demo-pill" onclick="fillUser()">
+            <span class="dot dot-cashier"></span> Fill User
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <script>
+    let selectedRole = null;
+
+    function selectRole(role) {
+      selectedRole = role;
+      document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+      document.getElementById('role-' + role).classList.add('selected');
+
+      const passSection = document.getElementById('password-section');
+      const shiftSection = document.getElementById('shift-section');
+
+      if (role === 'admin') {
+        passSection.classList.remove('hidden');
+        shiftSection.style.display = 'flex';
+        document.getElementById('email-input').placeholder = 'admin@gmail.com';
+      } else if (role === 'user') {
+        passSection.classList.add('hidden');
+        shiftSection.style.display = 'none';
+        document.getElementById('email-input').placeholder = 'Your name or guest ID';
+      } else {
+        passSection.classList.remove('hidden');
+        shiftSection.style.display = 'flex';
+        document.getElementById('email-input').placeholder = 'cashier@store.io';
+      }
+      hideError();
+    }
+
+    function fillAdmin() {
+      selectRole('admin');
+      document.getElementById('email-input').value = 'admin@gmail.com';
+      document.getElementById('pass-input').value = '123456';
+    }
+
+    function fillUser() {
+      selectRole('user');
+      document.getElementById('email-input').value = 'guest';
+    }
+
+    let passVisible = false;
+    function togglePass() {
+      passVisible = !passVisible;
+      const inp = document.getElementById('pass-input');
+      const ico = document.getElementById('pass-toggle-ico');
+      inp.type = passVisible ? 'text' : 'password';
+      ico.textContent = passVisible ? 'visibility_off' : 'visibility';
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('error-box');
+      document.getElementById('error-text').textContent = msg;
+      box.classList.remove('hidden');
+    }
+    function hideError() {
+      document.getElementById('error-box').classList.add('hidden');
+    }
+
+    async function handleLogin() {
+      hideError();
+      const btn = document.getElementById('sign-in-btn');
+
+      if (!selectedRole) {
+        showError('Please select an operational mode to continue.');
+        return;
+      }
+
+      if (selectedRole === 'user') {
+        window.location.href = '/user';
+        return;
+      }
+
+      const email = document.getElementById('email-input').value.trim();
+      const password = document.getElementById('pass-input').value;
+
+      if (!email || !password) {
+        showError('Please enter your Employee ID and Security Key.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite;">sync</span> Authenticating…';
+
+      try {
+        const resp = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({email, password})
+        });
+        const data = await resp.json();
+        if (data.success) {
+          btn.innerHTML = '<span class="material-icons">check_circle</span> Authenticated!';
+          btn.style.background = '#15803d';
+          setTimeout(() => { window.location.href = '/admin'; }, 600);
+        } else {
+          showError(data.message || 'Invalid credentials. Please try again.');
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-icons">login</span> Sign In to Console';
+        }
+      } catch(e) {
+        showError('Connection error. Please try again.');
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons">login</span> Sign In to Console';
+      }
+    }
+
+    // Enter key support
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') handleLogin();
+    });
+  </script>
+  <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
 </body>
 </html>

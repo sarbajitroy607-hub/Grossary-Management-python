@@ -1,109 +1,648 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Kiryana Store – Shop</title>
-  <meta name="description" content="Browse and shop grocery items at Kiryana Store."/>
+  <title>GroceryPro — Storefront &amp; Catalog</title>
+  <meta name="description" content="Browse and purchase grocery items. Real-time inventory with live cart management."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/static/style.css"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+  <style>
+    .user-layout {
+      display: flex; height: 100vh; padding-top: var(--header-height);
+    }
+    .user-main {
+      flex: 1; display: flex; flex-direction: column;
+      margin-left: var(--sidebar-width);
+      overflow: hidden;
+    }
+    .content-scroll {
+      flex: 1; overflow-y: auto; padding: var(--space-lg);
+    }
+    /* Product grid */
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: var(--space-md);
+    }
+    /* Cart panel right */
+    .cart-panel { width: 290px; }
+    /* Top strip */
+    .storefront-topbar {
+      background: var(--surface-bright);
+      border-bottom: 1px solid var(--surface-highest);
+      padding: var(--space-md) var(--space-lg);
+      display: flex; align-items: center; gap: var(--space-md);
+      flex-wrap: wrap;
+    }
+    .topbar-search { flex: 1; min-width: 180px; }
+    /* Banner */
+    .storefront-banner {
+      background: linear-gradient(135deg, var(--surface-container) 0%, var(--surface-low) 100%);
+      border: 1px solid var(--surface-highest);
+      border-radius: var(--radius-xl);
+      padding: var(--space-lg);
+      margin-bottom: var(--space-lg);
+      position: relative; overflow: hidden;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .storefront-banner::before {
+      content:''; position:absolute; top:-40px; right:-40px;
+      width:180px; height:180px; background: var(--primary-fixed-dim);
+      border-radius:50%; opacity:.2;
+    }
+    .storefront-banner-tag {
+      font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+      color:var(--primary);background:rgba(149,248,167,.35);
+      padding:2px 8px;border-radius:100px;display:inline-block;margin-bottom:8px;
+    }
+    .storefront-banner h1 { font-size:26px;font-weight:800;color:var(--on-surface);letter-spacing:-.015em;line-height:1.2; }
+    .storefront-banner p { font-size:12px;color:var(--on-surface-variant);margin-top:4px; }
+    .banner-metrics {
+      display:flex;align-items:center;gap:var(--space-md);
+      background:white;border:1px solid var(--surface-highest);
+      border-radius:var(--radius-lg);padding:var(--space-sm) var(--space-md);
+      position:relative;z-index:1;
+    }
+    .bm-item { display:flex;align-items:center;gap:8px; }
+    .bm-icon { width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px; }
+    .bm-icon-primary { background:rgba(149,248,167,.3); color:var(--primary); }
+    .bm-icon-secondary { background:var(--secondary-container); color:var(--secondary); }
+    .bm-label { font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--outline); }
+    .bm-value { font-size:18px;font-weight:800;color:var(--on-surface);line-height:1; }
+    .bm-divider { width:1px;height:32px;background:var(--surface-highest); }
+    /* Section categories */
+    .category-mosaics {
+      display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-md);
+      margin-bottom:var(--space-lg);
+    }
+    .cat-card {
+      background:var(--surface-bright);border:1px solid var(--surface-highest);
+      border-radius:var(--radius-xl);padding:var(--space-md);
+      cursor:pointer;transition:all .2s;
+      position:relative;overflow:hidden;box-shadow:var(--shadow-sm);
+    }
+    .cat-card::after {
+      content:'';position:absolute;bottom:0;left:0;right:0;height:2px;
+      background:var(--primary);transform:scaleX(0);transform-origin:left;
+      transition:transform .2s;
+    }
+    .cat-card:hover::after { transform:scaleX(1); }
+    .cat-card:hover { box-shadow:var(--shadow-md); }
+    .cat-card.active { background:var(--surface-low);border-color:var(--primary-fixed-dim); }
+    .cat-card .cat-icon {
+      width:44px;height:44px;border-radius:10px;
+      display:flex;align-items:center;justify-content:center;font-size:22px;
+      margin-bottom:var(--space-sm);
+      transition:transform .2s;
+    }
+    .cat-card:hover .cat-icon { transform:scale(1.1); }
+    .cat-sub { font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--outline); }
+    .cat-name { font-size:14px;font-weight:700;color:var(--on-surface); }
+    .cat-count {
+      font-size:10px;font-weight:700;padding:2px 7px;
+      border-radius:100px;
+    }
+    /* Item emoji map */
+    .item-emojis {
+      rice:'🌾'; wheat:'🌿'; flour:'🍞'; oil:'🫙';
+      daal:'🫛'; soap:'🧼'; surf:'🧺';
+    }
+    /* Qty row in card */
+    .card-controls { display:flex;align-items:center;gap:6px;margin-top:auto; }
+    /* Out-of-stock overlay */
+    .oos-overlay {
+      position:absolute;inset:0;background:rgba(255,255,255,.85);
+      display:flex;align-items:center;justify-content:center;
+      font-size:11px;font-weight:700;color:var(--error);letter-spacing:.05em;text-transform:uppercase;
+      border-radius:var(--radius-xl);
+    }
+    /* Receipt modal */
+    .receipt-body { display:flex;flex-direction:column;gap:10px; }
+    .receipt-row { display:flex;align-items:center;justify-content:space-between; }
+    .receipt-row .r-name { font-size:13px;color:var(--on-surface);font-weight:600; }
+    .receipt-row .r-detail { font-size:11px;color:var(--outline); }
+    .receipt-row .r-total { font-size:14px;font-weight:700;color:var(--on-surface); }
+    .receipt-grand { font-size:26px;font-weight:800;color:var(--primary);letter-spacing:-.02em; }
+    .receipt-divider { height:1px;background:var(--surface-high); }
+    @media (max-width:1100px) {
+      .category-mosaics { grid-template-columns:repeat(2,1fr); }
+    }
+    @media (max-width:800px) {
+      .category-mosaics { grid-template-columns:1fr; }
+      .banner-metrics { display:none; }
+      .storefront-banner h1 { font-size:20px; }
+    }
+  </style>
 </head>
-<body class="app-page">
-  <div class="orb orb-1"></div>
-  <div class="orb orb-2"></div>
-
-  <!-- Navbar -->
-  <nav class="navbar">
-    <a href="/" class="nav-brand">🛒 Kiryana Store</a>
-    <div class="nav-actions">
-      <button id="cart-toggle-btn" class="btn btn-outline cart-toggle">
-        🛍️ Cart <span class="cart-count" id="cart-count">0</span>
-      </button>
-      <a href="/" class="btn btn-ghost">← Back</a>
+<body>
+  <!-- ═══ HEADER ═══ -->
+  <header class="app-header">
+    <div class="header-left">
+      <a href="/" class="header-logo">
+        <div class="logo-icon"><span class="material-icons">eco</span></div>
+        GroceryPro
+      </a>
+      <span class="header-badge">OS v3.4</span>
+      <div class="store-pill">
+        <span class="material-icons">store</span>
+        Downtown Flagship · Store #104
+      </div>
     </div>
-  </nav>
-
-  <!-- Toast -->
-  <div id="toast" class="toast"></div>
-
-  <div class="page-layout">
-    <!-- Items Grid -->
-    <main class="main-content">
-      <div class="section-header">
-        <h1 class="section-title">Fresh Groceries</h1>
-        <p class="section-sub">Click any item to add it to your cart</p>
+    <div class="header-right">
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        Store Open · POS Online
       </div>
-      <div id="items-grid" class="items-grid">
-        <div class="skeleton-card"></div>
-        <div class="skeleton-card"></div>
-        <div class="skeleton-card"></div>
-        <div class="skeleton-card"></div>
-        <div class="skeleton-card"></div>
-        <div class="skeleton-card"></div>
+      <div class="user-chip">
+        <div class="user-info">
+          <div class="user-name">Walk-In / Guest</div>
+          <div class="user-role">Customer Lane</div>
+        </div>
+        <div class="avatar">G</div>
       </div>
-    </main>
+    </div>
+  </header>
 
-    <!-- Cart Panel -->
-    <aside id="cart-panel" class="cart-panel glass hidden">
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="app-sidebar">
+    <div>
+      <div class="sidebar-section-label">Operations Hub</div>
+      <nav>
+        <a href="/user" class="nav-link active">
+          <span class="material-icons">storefront</span> Storefront &amp; Catalog
+        </a>
+        <a href="/" class="nav-link">
+          <span class="material-icons">login</span> Sign In / Admin
+        </a>
+      </nav>
+    </div>
+    <div>
+      <div class="sidebar-section-label">Access Mode</div>
+      <div class="sidebar-role-card">
+        <div class="role-info">
+          <span class="material-icons role-icon">swap_horiz</span>
+          <div>
+            <div class="role-title">Role Switcher</div>
+            <div class="role-sub">Customer Mode Active</div>
+          </div>
+        </div>
+        <span class="material-icons" style="color:var(--outline);font-size:18px;">chevron_right</span>
+      </div>
+      <div class="sidebar-terminal-label">Terminal POS-04 · Lane 2</div>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN LAYOUT ═══ -->
+  <div class="user-layout">
+    <!-- Main content -->
+    <div class="user-main">
+      <!-- Search + filter strip -->
+      <div class="storefront-topbar">
+        <div class="topbar-search">
+          <div class="search-bar">
+            <span class="material-icons">search</span>
+            <input type="text" id="search-input" placeholder="Search items… (F2 Scan)" oninput="filterProducts()"/>
+            <span style="font-size:11px;font-weight:700;color:var(--outline);background:var(--surface-container);padding:2px 6px;border-radius:4px;">F2</span>
+          </div>
+        </div>
+        <div class="filter-tabs">
+          <div class="filter-tab active" id="tab-all" onclick="setCategory('all')">All Items</div>
+          <div class="filter-tab" id="tab-staples" onclick="setCategory('staples')">Staples</div>
+          <div class="filter-tab" id="tab-oils" onclick="setCategory('oils')">Oils</div>
+          <div class="filter-tab" id="tab-cleaning" onclick="setCategory('cleaning')">Cleaning</div>
+        </div>
+        <div style="font-size:11px;color:var(--outline);font-weight:600;">SORT:</div>
+        <select class="form-input form-select" id="sort-select" onchange="sortProducts()" style="width:auto;padding:6px 30px 6px 10px;font-size:12px;">
+          <option value="default">Featured</option>
+          <option value="price-asc">Price ↑</option>
+          <option value="price-desc">Price ↓</option>
+          <option value="stock-desc">Most Stock</option>
+        </select>
+      </div>
+
+      <!-- Scrollable content -->
+      <div class="content-scroll">
+        <!-- Banner -->
+        <div class="storefront-banner">
+          <div style="position:relative;z-index:1;">
+            <div class="storefront-banner-tag">Storefront Active · Terminal Sync <span style="color:var(--outline);">· Refreshed just now</span></div>
+            <h1>Storefront &amp; Inventory Catalog</h1>
+            <p>Real-time floor catalog linked to Central ERP. Add items to your cart, then checkout.</p>
+          </div>
+          <div class="banner-metrics">
+            <div class="bm-item">
+              <div class="bm-icon bm-icon-primary"><span class="material-icons">inventory_2</span></div>
+              <div>
+                <div class="bm-label">Active SKUs</div>
+                <div class="bm-value" id="total-skus">—</div>
+              </div>
+            </div>
+            <div class="bm-divider"></div>
+            <div class="bm-item">
+              <div class="bm-icon bm-icon-secondary"><span class="material-icons">scale</span></div>
+              <div>
+                <div class="bm-label">Scale</div>
+                <div class="bm-value" style="color:var(--primary);">0.000 lb</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category mosaics -->
+        <div class="category-mosaics">
+          <div class="cat-card active" id="cat-all" onclick="setCategory('all')">
+            <div class="cat-icon" style="background:rgba(149,248,167,.3);color:var(--primary);">
+              <span class="material-icons">grid_view</span>
+            </div>
+            <div class="cat-sub">All Departments</div>
+            <div class="cat-name">All Items</div>
+          </div>
+          <div class="cat-card" id="cat-staples" onclick="setCategory('staples')">
+            <div class="cat-icon" style="background:rgba(218,226,253,.5);color:var(--secondary);">
+              <span class="material-icons">grain</span>
+            </div>
+            <div class="cat-sub">Pantry Essentials</div>
+            <div class="cat-name">Staples &amp; Grains</div>
+          </div>
+          <div class="cat-card" id="cat-oils" onclick="setCategory('oils')">
+            <div class="cat-icon" style="background:var(--tertiary-fixed);color:var(--tertiary);">
+              <span class="material-icons">water_drop</span>
+            </div>
+            <div class="cat-sub">Cooking</div>
+            <div class="cat-name">Oils &amp; Fats</div>
+          </div>
+          <div class="cat-card" id="cat-cleaning" onclick="setCategory('cleaning')">
+            <div class="cat-icon" style="background:var(--secondary-container);color:var(--secondary);">
+              <span class="material-icons">cleaning_services</span>
+            </div>
+            <div class="cat-sub">Hygiene</div>
+            <div class="cat-name">Cleaning Supplies</div>
+          </div>
+        </div>
+
+        <!-- Product grid -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-md);">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--outline);">
+            Showing <span id="product-count">—</span> active live items
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--primary);">
+            <span class="material-icons" style="font-size:14px;">bolt</span>
+            Fast PLU Touchpad Enabled
+          </div>
+        </div>
+        <div class="product-grid" id="product-grid">
+          <!-- Injected by JS -->
+          <div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--outline);">
+            <span class="material-icons" style="font-size:36px;opacity:.4;">inventory_2</span>
+            <p style="margin-top:8px;font-size:13px;">Loading products…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ CART PANEL ═══ -->
+    <div class="cart-panel">
       <div class="cart-header">
-        <h2>🛍️ Your Cart</h2>
-        <button id="cart-close-btn" class="btn btn-ghost icon-btn">✕</button>
-      </div>
-      <div id="cart-items" class="cart-items">
-        <div class="empty-cart">
-          <div class="empty-icon">🛒</div>
-          <p>Your cart is empty</p>
+        <div>
+          <div class="cart-title">Active Register Cart</div>
+          <div style="font-size:10px;color:var(--outline);font-weight:600;margin-top:2px;">Terminal Lane 02 · Customer: Walk-In / Guest</div>
+        </div>
+        <div class="flex items-center gap-sm">
+          <span class="cart-count-badge" id="cart-badge">0</span>
+          <button class="btn btn-sm btn-secondary" onclick="clearCart()" title="Clear Cart">
+            <span class="material-icons" style="font-size:15px;">delete_sweep</span>
+          </button>
         </div>
       </div>
-      <div id="cart-footer" class="cart-footer hidden">
-        <div class="cart-total">
-          <span>Total</span>
-          <span id="cart-total-amount" class="total-amount">Rs. 0</span>
-        </div>
-        <button id="checkout-btn" class="btn btn-primary btn-full">Checkout 🎉</button>
-        <button id="clear-cart-btn" class="btn btn-ghost btn-full">Clear Cart</button>
-      </div>
-    </aside>
-  </div>
 
-  <!-- Add to Cart Modal -->
-  <div id="modal-overlay" class="modal-overlay hidden">
-    <div class="modal glass">
-      <h3 id="modal-item-name" class="modal-title">Rice</h3>
-      <p id="modal-item-info" class="modal-info"></p>
-      <div class="modal-form">
-        <label class="form-label">Quantity</label>
-        <div class="qty-control">
-          <button id="qty-dec" class="qty-btn">−</button>
-          <input type="number" id="qty-input" class="qty-input" value="1" min="1"/>
-          <button id="qty-inc" class="qty-btn">+</button>
-        </div>
+      <div id="cart-content" class="cart-empty">
+        <span class="material-icons cart-empty-icon">shopping_cart</span>
+        <p class="cart-empty-text">Your cart is empty.<br/>Add items from the catalog to get started.</p>
       </div>
-      <div class="modal-actions">
-        <button id="modal-cancel" class="btn btn-ghost">Cancel</button>
-        <button id="modal-add" class="btn btn-primary">Add to Cart</button>
+
+      <div id="cart-items-list" style="flex:1;overflow-y:auto;padding:var(--space-md);display:none;flex-direction:column;gap:var(--space-sm);"></div>
+
+      <div class="cart-footer">
+        <div class="cart-subtotal-row">
+          <span>Subtotal</span>
+          <span id="subtotal">₹0.00</span>
+        </div>
+        <div class="cart-subtotal-row">
+          <span>Est. Tax (8.25%)</span>
+          <span id="tax-amt">₹0.00</span>
+        </div>
+        <div class="divider" style="margin:4px 0;"></div>
+        <div class="cart-total-row">
+          <span class="cart-total-label">Total Amount</span>
+          <span class="cart-total-amount" id="grand-total">₹0.00</span>
+        </div>
+        <button class="btn btn-primary btn-full btn-lg" id="checkout-btn" onclick="checkout()" disabled>
+          <span class="material-icons">point_of_sale</span>
+          Proceed to Checkout
+        </button>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--outline);font-weight:600;">
+          <span>⊕ Auto-Receipt ON</span>
+          <span>⊕ NFC Ready</span>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Receipt Modal -->
-  <div id="receipt-overlay" class="modal-overlay hidden">
-    <div class="modal glass wide-modal">
-      <div class="receipt-header">
-        <div class="receipt-icon">🎉</div>
-        <h3>Order Confirmed!</h3>
-        <p>Thank you for shopping at Kiryana Store</p>
+  <div class="modal-overlay" id="receipt-modal">
+    <div class="modal" style="max-width:420px;">
+      <button class="modal-close" onclick="closeReceipt()"><span class="material-icons" style="font-size:18px;">close</span></button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <div style="width:40px;height:40px;border-radius:10px;background:rgba(149,248,167,.35);display:flex;align-items:center;justify-content:center;">
+          <span class="material-icons" style="color:var(--primary);font-size:22px;">check_circle</span>
+        </div>
+        <div>
+          <div class="modal-title" style="margin-bottom:0;font-size:18px;">Purchase Complete!</div>
+          <div style="font-size:12px;color:var(--outline);">Thanks for shopping at GroceryPro</div>
+        </div>
       </div>
-      <div id="receipt-items" class="receipt-items"></div>
-      <div class="receipt-total">
-        <span>Grand Total</span>
-        <span id="receipt-grand-total" class="total-amount"></span>
-      </div>
-      <button id="receipt-close" class="btn btn-primary btn-full">Continue Shopping</button>
+      <div class="receipt-body" id="receipt-body"></div>
     </div>
   </div>
 
-  <script src="/static/user.js"></script>
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script>
+    const EMOJI_MAP = {
+      rice:'🌾', wheat:'🌿', flour:'🍞', oil:'🫙', daal:'🫘', soap:'🧼', surf:'🧺',
+    };
+    const CATEGORY_MAP = {
+      rice:'staples', wheat:'staples', flour:'staples', daal:'staples',
+      oil:'oils', soap:'cleaning', surf:'cleaning',
+    };
+    const UNIT_MAP = {
+      rice:'/kg', wheat:'/kg', flour:'/kg', oil:'/L', daal:'/kg', soap:'/bar', surf:'/kg',
+    };
+
+    let allItems = [];
+    let cartData = { items: [], grand_total: 0 };
+    let currentCategory = 'all';
+    let searchTerm = '';
+    let sortMode = 'default';
+    const qtyMap = {};
+
+    /* ── Load items ── */
+    async function loadItems() {
+      const res = await fetch('/api/items');
+      allItems = await res.json();
+      document.getElementById('total-skus').textContent = allItems.length;
+      allItems.forEach(i => qtyMap[i.name] = 1);
+      renderProducts();
+    }
+
+    /* ── Load cart ── */
+    async function loadCart() {
+      const res = await fetch('/api/cart');
+      cartData = await res.json();
+      renderCart();
+    }
+
+    /* ── Render products ── */
+    function getFilteredSorted() {
+      let items = [...allItems];
+      if (currentCategory !== 'all') {
+        items = items.filter(i => (CATEGORY_MAP[i.name] || 'other') === currentCategory);
+      }
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        items = items.filter(i => i.name.includes(q));
+      }
+      if (sortMode === 'price-asc')   items.sort((a,b) => a.price - b.price);
+      if (sortMode === 'price-desc')  items.sort((a,b) => b.price - a.price);
+      if (sortMode === 'stock-desc')  items.sort((a,b) => b.stock - a.stock);
+      return items;
+    }
+
+    function renderProducts() {
+      const grid = document.getElementById('product-grid');
+      const items = getFilteredSorted();
+      document.getElementById('product-count').textContent = items.length;
+      if (!items.length) {
+        grid.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--outline);">
+          <span class="material-icons" style="font-size:36px;opacity:.4;">search_off</span>
+          <p style="margin-top:8px;font-size:13px;">No items found.</p>
+        </div>`;
+        return;
+      }
+      grid.innerHTML = items.map(item => {
+        const emoji = EMOJI_MAP[item.name] || '🛒';
+        const unit = UNIT_MAP[item.name] || '/ea';
+        const inStock = item.stock > 0;
+        const lowStock = item.stock > 0 && item.stock <= 3;
+        let stockBadge = inStock
+          ? (lowStock ? `<div class="badge badge-warning product-card-stock-badge">Low Stock · ${item.stock} left</div>`
+                      : `<div class="badge badge-success product-card-stock-badge"><span class="badge-dot badge-dot-success"></span> In Stock · ${item.stock}</div>`)
+          : `<div class="badge badge-error product-card-stock-badge">Out of Stock</div>`;
+        const sku = `SKU-${item.name.toUpperCase().slice(0,3)}-${Math.floor(Math.random()*9000+1000)}`;
+        const qty = qtyMap[item.name] || 1;
+        return `
+          <div class="product-card" id="card-${item.name}">
+            <div class="product-card-img">
+              <div style="font-size:52px;">${emoji}</div>
+              ${stockBadge}
+            </div>
+            <div class="product-card-body">
+              <div class="product-sku">${sku} · Grocery</div>
+              <div class="product-name">${capitalize(item.name)}</div>
+              <div class="product-price">₹${item.price.toFixed(2)} <span>${unit}</span></div>
+              <div class="card-controls">
+                <div class="qty-control">
+                  <button class="qty-btn" onclick="changeQty('${item.name}',-1)">−</button>
+                  <input class="qty-input" id="qty-${item.name}" type="number" value="${qty}" min="1" max="${item.stock}" onchange="updateQty('${item.name}',this.value)"/>
+                  <button class="qty-btn" onclick="changeQty('${item.name}',1)">+</button>
+                </div>
+                <button class="add-btn" onclick="addToCart('${item.name}')" ${!inStock?'disabled style="opacity:.5;pointer-events:none;"':''}>
+                  <span class="material-icons">add_shopping_cart</span> Add
+                </button>
+              </div>
+            </div>
+            ${!inStock ? '<div class="oos-overlay">Out of Stock</div>' : ''}
+          </div>`;
+      }).join('');
+    }
+
+    /* ── Render cart ── */
+    function renderCart() {
+      const items = cartData.items || [];
+      const total = cartData.grand_total || 0;
+      const tax = total * 0.0825;
+      const grand = total + tax;
+      const badge = document.getElementById('cart-badge');
+      badge.textContent = items.reduce((s,i) => s + i.qty, 0);
+
+      const emptyEl = document.getElementById('cart-content');
+      const listEl = document.getElementById('cart-items-list');
+      const checkoutBtn = document.getElementById('checkout-btn');
+
+      if (!items.length) {
+        emptyEl.style.display = 'flex';
+        listEl.style.display = 'none';
+        checkoutBtn.disabled = true;
+      } else {
+        emptyEl.style.display = 'none';
+        listEl.style.display = 'flex';
+        checkoutBtn.disabled = false;
+        listEl.innerHTML = items.map(i => `
+          <div class="cart-item">
+            <div style="flex:1;">
+              <div class="cart-item-name">${capitalize(i.name)}</div>
+              <div class="cart-item-qty">${i.qty}x @ ₹${i.price.toFixed(2)}</div>
+            </div>
+            <div class="cart-item-total">₹${i.total.toFixed(2)}</div>
+            <span class="material-icons cart-item-remove" onclick="removeFromCart('${i.name}',${i.qty})">close</span>
+          </div>`).join('');
+      }
+      document.getElementById('subtotal').textContent = `₹${total.toFixed(2)}`;
+      document.getElementById('tax-amt').textContent = `₹${tax.toFixed(2)}`;
+      document.getElementById('grand-total').textContent = `₹${grand.toFixed(2)}`;
+    }
+
+    /* ── Actions ── */
+    function changeQty(name, delta) {
+      const inp = document.getElementById(`qty-${name}`);
+      if (!inp) return;
+      let v = parseInt(inp.value) + delta;
+      const item = allItems.find(i => i.name === name);
+      if (!item) return;
+      v = Math.max(1, Math.min(v, item.stock));
+      inp.value = v;
+      qtyMap[name] = v;
+    }
+    function updateQty(name, val) {
+      const item = allItems.find(i => i.name === name);
+      let v = parseInt(val);
+      if (isNaN(v) || v < 1) v = 1;
+      if (item && v > item.stock) v = item.stock;
+      qtyMap[name] = v;
+      document.getElementById(`qty-${name}`).value = v;
+    }
+
+    async function addToCart(name) {
+      const qty = qtyMap[name] || 1;
+      const res = await fetch('/api/cart/add', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({item:name, qty})
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        await loadItems();
+        await loadCart();
+      } else {
+        showToast(data.message, 'error');
+      }
+    }
+
+    async function removeFromCart(name, qty) {
+      const res = await fetch('/api/cart/remove', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({item:name, qty})
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        await loadItems();
+        await loadCart();
+      } else {
+        showToast(data.message, 'error');
+      }
+    }
+
+    async function clearCart() {
+      await fetch('/api/cart/clear', {method:'POST'});
+      await loadItems();
+      await loadCart();
+      showToast('Cart cleared.', 'warning');
+    }
+
+    async function checkout() {
+      const res = await fetch('/api/checkout', {method:'POST'});
+      const data = await res.json();
+      if (data.success) {
+        const tax = data.grand_total * 0.0825;
+        const grand = data.grand_total + tax;
+        showReceipt(data.receipt, data.grand_total, tax, grand);
+        await loadItems();
+        await loadCart();
+      } else {
+        showToast(data.message, 'error');
+      }
+    }
+
+    function showReceipt(items, subtotal, tax, grand) {
+      const body = document.getElementById('receipt-body');
+      body.innerHTML = `
+        ${items.map(i=>`
+          <div class="receipt-row">
+            <div><div class="r-name">${capitalize(i.name)}</div><div class="r-detail">${i.qty}x @ ₹${i.price.toFixed(2)}</div></div>
+            <div class="r-total">₹${i.total.toFixed(2)}</div>
+          </div>`).join('')}
+        <div class="receipt-divider"></div>
+        <div class="receipt-row"><span style="font-size:12px;color:var(--outline);">Subtotal</span><span style="font-size:13px;font-weight:700;">₹${subtotal.toFixed(2)}</span></div>
+        <div class="receipt-row"><span style="font-size:12px;color:var(--outline);">Tax (8.25%)</span><span style="font-size:13px;font-weight:700;">₹${tax.toFixed(2)}</span></div>
+        <div class="receipt-divider"></div>
+        <div class="receipt-row">
+          <span style="font-size:14px;font-weight:700;">Final Balance Due</span>
+          <span class="receipt-grand">₹${grand.toFixed(2)}</span>
+        </div>
+        <button class="btn btn-primary btn-full btn-lg" style="margin-top:8px;" onclick="closeReceipt()">
+          <span class="material-icons">check_circle</span> Done — Print Receipt
+        </button>`;
+      document.getElementById('receipt-modal').classList.add('open');
+    }
+    function closeReceipt() {
+      document.getElementById('receipt-modal').classList.remove('open');
+    }
+
+    /* ── Category / Filter ── */
+    function setCategory(cat) {
+      currentCategory = cat;
+      document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      const catEl = document.getElementById(`cat-${cat}`);
+      if (catEl) catEl.classList.add('active');
+      const tabEl = document.getElementById(`tab-${cat}`);
+      if (tabEl) tabEl.classList.add('active');
+      renderProducts();
+    }
+    function filterProducts() {
+      searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
+      renderProducts();
+    }
+    function sortProducts() {
+      sortMode = document.getElementById('sort-select').value;
+      renderProducts();
+    }
+
+    /* ── Toast ── */
+    function showToast(msg, type='success') {
+      const icons = {success:'check_circle', error:'error_outline', warning:'warning_amber'};
+      const container = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.innerHTML = `<span class="material-icons">${icons[type]||'info'}</span>${msg}`;
+      container.appendChild(t);
+      setTimeout(() => {
+        t.classList.add('removing');
+        setTimeout(() => t.remove(), 220);
+      }, 3500);
+    }
+
+    function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+    /* ── Init ── */
+    loadItems();
+    loadCart();
+  </script>
 </body>
 </html>
