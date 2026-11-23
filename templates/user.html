@@ -276,12 +276,145 @@
       transform: translateY(-1px);
     }
     @media (max-width:1100px) {
-      .category-mosaics { grid-template-columns:repeat(2,1fr); }
+      .category-mosaics { grid-template-columns:repeat(3,1fr); }
     }
     @media (max-width:800px) {
-      .category-mosaics { grid-template-columns:1fr; }
+      .category-mosaics { grid-template-columns:repeat(2,1fr); }
       .banner-metrics { display:none; }
       .storefront-banner h1 { font-size:20px; }
+    }
+
+    /* Enhanced Filter Tabs & Chip Counts */
+    .filter-tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filter-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1.5px solid var(--surface-highest);
+      background: var(--surface-bright);
+      color: var(--on-surface-variant);
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .filter-tab:hover {
+      background: var(--surface-container);
+      color: var(--on-surface);
+      border-color: #cbd5e1;
+    }
+    .filter-tab.active {
+      background: #006d30;
+      color: white;
+      border-color: #006d30;
+      box-shadow: 0 2px 8px rgba(0, 109, 48, 0.25);
+    }
+    .filter-tab.active .chip-count {
+      background: rgba(255, 255, 255, 0.28);
+      color: white;
+    }
+    .chip-count {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 100px;
+      background: var(--surface-container-high);
+      color: var(--on-surface-variant);
+    }
+
+    /* Real-time Search Highlight */
+    .search-highlight {
+      background: #fef08a;
+      color: #854d0e;
+      padding: 1px 3px;
+      border-radius: 3px;
+      font-weight: 800;
+    }
+
+    /* Urgent Low Stock Badge & Animation */
+    .badge-urgent-stock {
+      background: #fef2f2 !important;
+      color: #b91c1c !important;
+      border: 1px solid #fecaca !important;
+      animation: pulseUrgent 1.8s infinite;
+      box-shadow: 0 1px 4px rgba(185, 28, 28, 0.15);
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 100px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    @keyframes pulseUrgent {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.9; transform: scale(1.03); }
+    }
+    .urgent-fire {
+      font-size: 11px;
+      animation: flameWiggle 1s infinite alternate;
+      display: inline-block;
+    }
+    @keyframes flameWiggle {
+      0% { transform: rotate(-6deg); }
+      100% { transform: rotate(6deg); }
+    }
+
+    /* Product Card Enhancements */
+    .product-card.urgent-card {
+      border-color: #fca5a5;
+      box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.2);
+    }
+    .product-card-img-themed {
+      width: 100%;
+      aspect-ratio: 4/3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid var(--surface-highest);
+      transition: transform 0.2s ease;
+    }
+    .product-card:hover .product-card-img-themed {
+      transform: scale(1.02);
+    }
+    .cat-pill {
+      font-size: 9.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 2px 7px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .stock-meter-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      background: #ef4444;
+      border-radius: 0 3px 3px 0;
+      transition: width 0.3s ease;
+    }
+    .product-card.oos-card {
+      opacity: 0.75;
+    }
+    .product-card.oos-card:hover {
+      transform: none;
     }
   </style>
 </head>
@@ -352,15 +485,50 @@
         <div class="topbar-search">
           <div class="search-bar">
             <span class="material-icons">search</span>
-            <input type="text" id="search-input" placeholder="Search items… (F2 Scan)" oninput="filterProducts()"/>
+            <input type="text" id="search-input" placeholder="Search items by name, category, SKU… (F2)" oninput="filterProducts()"/>
+            <button id="search-clear-btn" onclick="clearSearch()" style="display:none;background:none;border:none;cursor:pointer;color:var(--outline);padding:0 4px;" title="Clear Search">
+              <span class="material-icons" style="font-size:16px;">close</span>
+            </button>
             <span style="font-size:11px;font-weight:700;color:var(--outline);background:var(--surface-container);padding:2px 6px;border-radius:4px;">F2</span>
           </div>
         </div>
-        <div class="filter-tabs">
-          <div class="filter-tab active" id="tab-all" onclick="setCategory('all')">All Items</div>
-          <div class="filter-tab" id="tab-staples" onclick="setCategory('staples')">Staples</div>
-          <div class="filter-tab" id="tab-oils" onclick="setCategory('oils')">Oils</div>
-          <div class="filter-tab" id="tab-cleaning" onclick="setCategory('cleaning')">Cleaning</div>
+        <div class="filter-tabs" id="filter-tabs-container">
+          <div class="filter-tab active" id="tab-all" onclick="setCategory('all')">
+            <span class="material-icons" style="font-size:14px;">grid_view</span> All
+            <span class="chip-count" id="chip-count-all">0</span>
+          </div>
+          <div class="filter-tab" id="tab-staples" onclick="setCategory('Staples')">
+            <span class="material-icons" style="font-size:14px;">grain</span> Staples
+            <span class="chip-count" id="chip-count-staples">0</span>
+          </div>
+          <div class="filter-tab" id="tab-dairy" onclick="setCategory('Dairy')">
+            <span class="material-icons" style="font-size:14px;">egg_alt</span> Dairy
+            <span class="chip-count" id="chip-count-dairy">0</span>
+          </div>
+          <div class="filter-tab" id="tab-beverages" onclick="setCategory('Beverages')">
+            <span class="material-icons" style="font-size:14px;">local_cafe</span> Beverages
+            <span class="chip-count" id="chip-count-beverages">0</span>
+          </div>
+          <div class="filter-tab" id="tab-spices" onclick="setCategory('Spices')">
+            <span class="material-icons" style="font-size:14px;">flare</span> Spices
+            <span class="chip-count" id="chip-count-spices">0</span>
+          </div>
+          <div class="filter-tab" id="tab-cleaning" onclick="setCategory('Cleaning')">
+            <span class="material-icons" style="font-size:14px;">cleaning_services</span> Cleaning
+            <span class="chip-count" id="chip-count-cleaning">0</span>
+          </div>
+          <div class="filter-tab" id="tab-oils" onclick="setCategory('Oils')">
+            <span class="material-icons" style="font-size:14px;">water_drop</span> Oils
+            <span class="chip-count" id="chip-count-oils">0</span>
+          </div>
+          <div class="filter-tab" id="tab-snacks" onclick="setCategory('Snacks')">
+            <span class="material-icons" style="font-size:14px;">cookie</span> Snacks
+            <span class="chip-count" id="chip-count-snacks">0</span>
+          </div>
+          <div class="filter-tab" id="tab-pulses" onclick="setCategory('Pulses')">
+            <span class="material-icons" style="font-size:14px;">soup_kitchen</span> Pulses
+            <span class="chip-count" id="chip-count-pulses">0</span>
+          </div>
         </div>
         <div style="font-size:11px;color:var(--outline);font-weight:600;">SORT:</div>
         <select class="form-input form-select" id="sort-select" onchange="sortProducts()" style="width:auto;padding:6px 30px 6px 10px;font-size:12px;">
@@ -368,6 +536,7 @@
           <option value="price-asc">Price ↑</option>
           <option value="price-desc">Price ↓</option>
           <option value="stock-desc">Most Stock</option>
+          <option value="stock-asc">Low Stock First</option>
         </select>
       </div>
 
@@ -376,9 +545,9 @@
         <!-- Banner -->
         <div class="storefront-banner">
           <div style="position:relative;z-index:1;">
-            <div class="storefront-banner-tag">Storefront Active · Terminal Sync <span style="color:var(--outline);">· Refreshed just now</span></div>
-            <h1>Storefront &amp; Inventory Catalog</h1>
-            <p>Real-time floor catalog linked to Central ERP. Add items to your cart, then checkout.</p>
+            <div class="storefront-banner-tag">Storefront Active · Real-Time Floor Inventory</div>
+            <h1>Fresh Supermarket Catalog</h1>
+            <p>Browse by department, search products, check stock levels, and add items to your cart.</p>
           </div>
           <div class="banner-metrics">
             <div class="bm-item">
@@ -390,10 +559,10 @@
             </div>
             <div class="bm-divider"></div>
             <div class="bm-item">
-              <div class="bm-icon bm-icon-secondary"><span class="material-icons">scale</span></div>
+              <div class="bm-icon bm-icon-secondary"><span class="material-icons">category</span></div>
               <div>
-                <div class="bm-label">Scale</div>
-                <div class="bm-value" style="color:var(--primary);">0.000 lb</div>
+                <div class="bm-label">Departments</div>
+                <div class="bm-value" style="color:var(--primary);">8 Aisles</div>
               </div>
             </div>
           </div>
@@ -402,32 +571,76 @@
         <!-- Category mosaics -->
         <div class="category-mosaics">
           <div class="cat-card active" id="cat-all" onclick="setCategory('all')">
-            <div class="cat-icon" style="background:rgba(149,248,167,.3);color:var(--primary);">
+            <div class="cat-icon" style="background:rgba(149,248,167,.3);color:#006d30;">
               <span class="material-icons">grid_view</span>
             </div>
-            <div class="cat-sub">All Departments</div>
+            <div class="cat-sub">All Aisles</div>
             <div class="cat-name">All Items</div>
+            <div id="cat-count-all" style="font-size:10px;color:var(--outline);margin-top:2px;">—</div>
           </div>
-          <div class="cat-card" id="cat-staples" onclick="setCategory('staples')">
-            <div class="cat-icon" style="background:rgba(218,226,253,.5);color:var(--secondary);">
+          <div class="cat-card" id="cat-staples" onclick="setCategory('Staples')">
+            <div class="cat-icon" style="background:#fef9c3;color:#854d0e;">
               <span class="material-icons">grain</span>
             </div>
-            <div class="cat-sub">Pantry Essentials</div>
-            <div class="cat-name">Staples &amp; Grains</div>
+            <div class="cat-sub">Pantry</div>
+            <div class="cat-name">Staples</div>
+            <div id="cat-count-staples" style="font-size:10px;color:var(--outline);margin-top:2px;">—</div>
           </div>
-          <div class="cat-card" id="cat-oils" onclick="setCategory('oils')">
-            <div class="cat-icon" style="background:var(--tertiary-fixed);color:var(--tertiary);">
-              <span class="material-icons">water_drop</span>
+          <div class="cat-card" id="cat-dairy" onclick="setCategory('Dairy')">
+            <div class="cat-icon" style="background:#e0f2fe;color:#0369a1;">
+              <span class="material-icons">egg_alt</span>
             </div>
-            <div class="cat-sub">Cooking</div>
-            <div class="cat-name">Oils &amp; Fats</div>
+            <div class="cat-sub">Chilled</div>
+            <div class="cat-name">Dairy</div>
+            <div id="cat-count-dairy" style="font-size:10px;color:var(--outline);margin-top:2px;">—</div>
           </div>
-          <div class="cat-card" id="cat-cleaning" onclick="setCategory('cleaning')">
-            <div class="cat-icon" style="background:var(--secondary-container);color:var(--secondary);">
+          <div class="cat-card" id="cat-beverages" onclick="setCategory('Beverages')">
+            <div class="cat-icon" style="background:#fef3c7;color:#78350f;">
+              <span class="material-icons">local_cafe</span>
+            </div>
+            <div class="cat-sub">Drinks</div>
+            <div class="cat-name">Beverages</div>
+            <div id="cat-count-beverages" style="font-size:10px;color:var(--outline);margin-top:2px;">—</div>
+          </div>
+          <div class="cat-card" id="cat-spices" onclick="setCategory('Spices')">
+            <div class="cat-icon" style="background:#ffedd5;color:#9a3412;">
+              <span class="material-icons">flare</span>
+            </div>
+            <div class="cat-sub">Seasonings</div>
+            <div class="cat-name">Spices</div>
+            <div id="cat-count-spices" style="font-size:10px;color:var(--outline);margin-top:2px;">—</div>
+          </div>
+          <div class="cat-card" id="cat-cleaning" onclick="setCategory('Cleaning')">
+            <div class="cat-icon" style="background:#ccfbf1;color:#115e59;">
               <span class="material-icons">cleaning_services</span>
             </div>
             <div class="cat-sub">Hygiene</div>
-            <div class="cat-name">Cleaning Supplies</div>
+            <div class="cat-name">Cleaning</div>
+            <div id="cat-count-cleaning" style="font-size:10px;color:var(--outline);margin-top:2px;">—</div>
+          </div>
+          <div class="cat-card" id="cat-oils" onclick="setCategory('Oils')">
+            <div class="cat-icon" style="background:#ecfccb;color:#3f6212;">
+              <span class="material-icons">water_drop</span>
+            </div>
+            <div class="cat-sub">Cooking</div>
+            <div class="cat-name">Oils &amp; Ghee</div>
+            <div id="cat-count-oils" style="font-size:10px;color:var(--outline);margin-top:2px;">—</div>
+          </div>
+          <div class="cat-card" id="cat-snacks" onclick="setCategory('Snacks')">
+            <div class="cat-icon" style="background:#ffe4e6;color:#9f1239;">
+              <span class="material-icons">cookie</span>
+            </div>
+            <div class="cat-sub">Quick Bites</div>
+            <div class="cat-name">Snacks</div>
+            <div id="cat-count-snacks" style="font-size:10px;color:var(--outline);margin-top:2px;">—</div>
+          </div>
+          <div class="cat-card" id="cat-pulses" onclick="setCategory('Pulses')">
+            <div class="cat-icon" style="background:#f3e8ff;color:#6b21a8;">
+              <span class="material-icons">soup_kitchen</span>
+            </div>
+            <div class="cat-sub">Grains</div>
+            <div class="cat-name">Pulses</div>
+            <div id="cat-count-pulses" style="font-size:10px;color:var(--outline);margin-top:2px;">—</div>
           </div>
         </div>
 
@@ -548,15 +761,55 @@
   <div class="toast-container" id="toast-container"></div>
 
   <script>
-    const EMOJI_MAP = {
-      rice:'🌾', wheat:'🌿', flour:'🍞', oil:'🫙', daal:'🫘', soap:'🧼', surf:'🧺',
+    const PRODUCT_VISUALS = {
+      rice:           { emoji: '🌾', unit: '/kg', icon: 'grain', bg: '#fef9c3', color: '#854d0e', cat: 'Staples' },
+      wheat:          { emoji: '🌾', unit: '/kg', icon: 'grain', bg: '#fef9c3', color: '#854d0e', cat: 'Staples' },
+      flour:          { emoji: '🍞', unit: '/kg', icon: 'bakery_dining', bg: '#fef9c3', color: '#854d0e', cat: 'Staples' },
+      sugar:          { emoji: '🍬', unit: '/kg', icon: 'cookie', bg: '#fef9c3', color: '#854d0e', cat: 'Staples' },
+      salt:           { emoji: '🧂', unit: '/kg', icon: 'grain', bg: '#fef9c3', color: '#854d0e', cat: 'Staples' },
+      pasta:          { emoji: '🍝', unit: '/pack', icon: 'dinner_dining', bg: '#fef9c3', color: '#854d0e', cat: 'Staples' },
+      poha:           { emoji: '🥣', unit: '/kg', icon: 'rice_bowl', bg: '#fef9c3', color: '#854d0e', cat: 'Staples' },
+      semolina:       { emoji: '🌾', unit: '/kg', icon: 'grain', bg: '#fef9c3', color: '#854d0e', cat: 'Staples' },
+      daal:           { emoji: '🍲', unit: '/kg', icon: 'soup_kitchen', bg: '#fef9c3', color: '#854d0e', cat: 'Staples' },
+
+      milk:           { emoji: '🥛', unit: '/L', icon: 'egg_alt', bg: '#e0f2fe', color: '#0369a1', cat: 'Dairy' },
+      butter:         { emoji: '🧈', unit: '/pack', icon: 'lunch_dining', bg: '#e0f2fe', color: '#0369a1', cat: 'Dairy' },
+
+      tea:            { emoji: '☕', unit: '/box', icon: 'local_cafe', bg: '#fef3c7', color: '#78350f', cat: 'Beverages' },
+      coffee:         { emoji: '☕', unit: '/jar', icon: 'coffee', bg: '#fef3c7', color: '#78350f', cat: 'Beverages' },
+
+      turmeric:       { emoji: '🟡', unit: '/pack', icon: 'flare', bg: '#ffedd5', color: '#9a3412', cat: 'Spices' },
+      chilli_powder:  { emoji: '🌶️', unit: '/pack', icon: 'flare', bg: '#ffedd5', color: '#9a3412', cat: 'Spices' },
+      coriander:      { emoji: '🌿', unit: '/pack', icon: 'eco', bg: '#ffedd5', color: '#9a3412', cat: 'Spices' },
+      cumin:          { emoji: '🍂', unit: '/pack', icon: 'grain', bg: '#ffedd5', color: '#9a3412', cat: 'Spices' },
+      garam_masala:   { emoji: '🍲', unit: '/pack', icon: 'flare', bg: '#ffedd5', color: '#9a3412', cat: 'Spices' },
+
+      soap:           { emoji: '🧼', unit: '/bar', icon: 'soap', bg: '#ccfbf1', color: '#115e59', cat: 'Cleaning' },
+      surf:           { emoji: '🧺', unit: '/kg', icon: 'cleaning_services', bg: '#ccfbf1', color: '#115e59', cat: 'Cleaning' },
+
+      oil:            { emoji: '🫒', unit: '/L', icon: 'water_drop', bg: '#ecfccb', color: '#3f6212', cat: 'Oils' },
+      ghee:           { emoji: '🫙', unit: '/jar', icon: 'takeout_dining', bg: '#ecfccb', color: '#3f6212', cat: 'Oils' },
+      mustard_oil:    { emoji: '🌻', unit: '/L', icon: 'water_drop', bg: '#ecfccb', color: '#3f6212', cat: 'Oils' },
+
+      biscuits:       { emoji: '🍪', unit: '/pack', icon: 'cookie', bg: '#ffe4e6', color: '#9f1239', cat: 'Snacks' },
+      chips:          { emoji: '🥔', unit: '/bag', icon: 'fastfood', bg: '#ffe4e6', color: '#9f1239', cat: 'Snacks' },
+      noodles:        { emoji: '🍜', unit: '/pack', icon: 'ramen_dining', bg: '#ffe4e6', color: '#9f1239', cat: 'Snacks' },
+
+      moong_daal:     { emoji: '🫘', unit: '/kg', icon: 'soup_kitchen', bg: '#f3e8ff', color: '#6b21a8', cat: 'Pulses' },
+      chana:          { emoji: '🌰', unit: '/kg', icon: 'grain', bg: '#f3e8ff', color: '#6b21a8', cat: 'Pulses' },
+      rajma:          { emoji: '🫘', unit: '/kg', icon: 'soup_kitchen', bg: '#f3e8ff', color: '#6b21a8', cat: 'Pulses' },
     };
-    const CATEGORY_MAP = {
-      rice:'staples', wheat:'staples', flour:'staples', daal:'staples',
-      oil:'oils', soap:'cleaning', surf:'cleaning',
-    };
-    const UNIT_MAP = {
-      rice:'/kg', wheat:'/kg', flour:'/kg', oil:'/L', daal:'/kg', soap:'/bar', surf:'/kg',
+
+    const CATEGORY_THEMES = {
+      Staples:   { icon: 'grain', bg: '#fef9c3', color: '#854d0e', label: 'Staples' },
+      Dairy:     { icon: 'egg_alt', bg: '#e0f2fe', color: '#0369a1', label: 'Dairy' },
+      Beverages: { icon: 'local_cafe', bg: '#fef3c7', color: '#78350f', label: 'Beverages' },
+      Spices:    { icon: 'flare', bg: '#ffedd5', color: '#9a3412', label: 'Spices' },
+      Cleaning:  { icon: 'cleaning_services', bg: '#ccfbf1', color: '#115e59', label: 'Cleaning' },
+      Oils:      { icon: 'water_drop', bg: '#ecfccb', color: '#3f6212', label: 'Oils' },
+      Snacks:    { icon: 'cookie', bg: '#ffe4e6', color: '#9f1239', label: 'Snacks' },
+      Pulses:    { icon: 'soup_kitchen', bg: '#f3e8ff', color: '#6b21a8', label: 'Pulses' },
+      General:   { icon: 'inventory_2', bg: '#f1f5f9', color: '#475569', label: 'General' },
     };
 
     let allItems = [];
@@ -571,8 +824,27 @@
       const res = await fetch('/api/items');
       allItems = await res.json();
       document.getElementById('total-skus').textContent = allItems.length;
-      allItems.forEach(i => qtyMap[i.name] = 1);
+      allItems.forEach(i => {
+        if (!qtyMap[i.name]) qtyMap[i.name] = 1;
+      });
+      updateCategoryCounts();
       renderProducts();
+    }
+
+    /* ── Update category counts ── */
+    function updateCategoryCounts() {
+      const counts = { all: allItems.length };
+      allItems.forEach(i => {
+        const cat = (i.category || 'General').toLowerCase();
+        counts[cat] = (counts[cat] || 0) + 1;
+      });
+
+      ['all', 'staples', 'dairy', 'beverages', 'spices', 'cleaning', 'oils', 'snacks', 'pulses'].forEach(cat => {
+        const el = document.getElementById(`chip-count-${cat}`);
+        if (el) el.textContent = counts[cat] || 0;
+        const catCardCount = document.getElementById(`cat-count-${cat}`);
+        if (catCardCount) catCardCount.textContent = (counts[cat] || 0) + ' items';
+      });
     }
 
     /* ── Load cart ── */
@@ -582,19 +854,32 @@
       renderCart();
     }
 
+    /* ── Search Highlighting ── */
+    function highlightMatch(text, query) {
+      if (!query) return text;
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escaped})`, 'gi');
+      return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+    }
+
     /* ── Render products ── */
     function getFilteredSorted() {
       let items = [...allItems];
-      if (currentCategory !== 'all') {
-        items = items.filter(i => (CATEGORY_MAP[i.name] || 'other') === currentCategory);
+      if (currentCategory && currentCategory !== 'all') {
+        items = items.filter(i => (i.category || 'General').toLowerCase() === currentCategory.toLowerCase());
       }
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
-        items = items.filter(i => i.name.includes(q));
+        items = items.filter(i =>
+          i.name.toLowerCase().includes(q) ||
+          (i.category && i.category.toLowerCase().includes(q)) ||
+          (i.sku && i.sku.toLowerCase().includes(q))
+        );
       }
       if (sortMode === 'price-asc')   items.sort((a,b) => a.price - b.price);
       if (sortMode === 'price-desc')  items.sort((a,b) => b.price - a.price);
       if (sortMode === 'stock-desc')  items.sort((a,b) => b.stock - a.stock);
+      if (sortMode === 'stock-asc')   items.sort((a,b) => a.stock - b.stock);
       return items;
     }
 
@@ -605,35 +890,57 @@
       if (!items.length) {
         grid.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--outline);">
           <span class="material-icons" style="font-size:36px;opacity:.4;">search_off</span>
-          <p style="margin-top:8px;font-size:13px;">No items found.</p>
+          <p style="margin-top:8px;font-size:13px;">No items found matching your filters.</p>
         </div>`;
         return;
       }
       grid.innerHTML = items.map(item => {
-        const emoji = EMOJI_MAP[item.name] || '🛒';
-        const unit = UNIT_MAP[item.name] || '/ea';
+        const meta = PRODUCT_VISUALS[item.name.toLowerCase()] || {};
+        const catName = item.category || meta.cat || 'General';
+        const theme = CATEGORY_THEMES[catName] || CATEGORY_THEMES['General'];
+        const emoji = meta.emoji || '🛒';
+        const unit = meta.unit || '/ea';
         const inStock = item.stock > 0;
-        const lowStock = item.stock > 0 && item.stock <= 3;
-        let stockBadge = inStock
-          ? (lowStock ? `<div class="badge badge-warning product-card-stock-badge">Low Stock · ${item.stock} left</div>`
-                      : `<div class="badge badge-success product-card-stock-badge"><span class="badge-dot badge-dot-success"></span> In Stock · ${item.stock}</div>`)
-          : `<div class="badge badge-error product-card-stock-badge">Out of Stock</div>`;
-        const sku = `SKU-${item.name.toUpperCase().slice(0,3)}-${Math.floor(Math.random()*9000+1000)}`;
+        const urgentStock = item.stock > 0 && item.stock <= 3;
+        const lowStock = item.stock > 3 && item.stock <= 6;
+
+        let stockBadge = '';
+        if (!inStock) {
+          stockBadge = `<div class="badge badge-error product-card-stock-badge"><span class="badge-dot badge-dot-error"></span> Out of Stock</div>`;
+        } else if (urgentStock) {
+          stockBadge = `<div class="badge badge-urgent-stock product-card-stock-badge"><span class="urgent-fire">🔥</span> Hurry, only ${item.stock} left!</div>`;
+        } else if (lowStock) {
+          stockBadge = `<div class="badge badge-warning product-card-stock-badge"><span class="badge-dot badge-dot-warning"></span> Limited Stock · ${item.stock} left</div>`;
+        } else {
+          stockBadge = `<div class="badge badge-success product-card-stock-badge"><span class="badge-dot badge-dot-success"></span> In Stock · ${item.stock}</div>`;
+        }
+
+        const sku = item.sku || `GP-${item.name.toUpperCase().slice(0,3)}`;
         const qty = qtyMap[item.name] || 1;
+        const highlightedName = highlightMatch(capitalize(item.name), searchTerm);
+        const stockPct = Math.min(100, Math.max(10, (item.stock / 20) * 100));
+
         return `
-          <div class="product-card" id="card-${item.name}">
-            <div class="product-card-img">
-              <div style="font-size:52px;">${emoji}</div>
+          <div class="product-card ${urgentStock ? 'urgent-card' : ''} ${!inStock ? 'oos-card' : ''}" id="card-${item.name}">
+            <div class="product-card-img-themed" style="background:${meta.bg || theme.bg};">
+              <div style="font-size:52px;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.08));">${emoji}</div>
               ${stockBadge}
+              ${urgentStock ? `<div class="stock-meter-bar" style="width:${stockPct}%;"></div>` : ''}
             </div>
             <div class="product-card-body">
-              <div class="product-sku">${sku} · Grocery</div>
-              <div class="product-name">${capitalize(item.name)}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span class="cat-pill" style="background:${theme.bg};color:${theme.color};">
+                  <span class="material-icons" style="font-size:11px;">${theme.icon}</span>
+                  ${catName}
+                </span>
+                <span class="product-sku">${sku}</span>
+              </div>
+              <div class="product-name" style="margin-top:2px;">${highlightedName}</div>
               <div class="product-price">₹${item.price.toFixed(2)} <span>${unit}</span></div>
               <div class="card-controls">
                 <div class="qty-control">
                   <button class="qty-btn" onclick="changeQty('${item.name}',-1)">−</button>
-                  <input class="qty-input" id="qty-${item.name}" type="number" value="${qty}" min="1" max="${item.stock}" onchange="updateQty('${item.name}',this.value)"/>
+                  <input class="qty-input" id="qty-${item.name}" type="number" value="${qty}" min="1" max="${item.stock || 1}" onchange="updateQty('${item.name}',this.value)"/>
                   <button class="qty-btn" onclick="changeQty('${item.name}',1)">+</button>
                 </div>
                 <button class="add-btn" onclick="addToCart('${item.name}')" ${!inStock?'disabled style="opacity:.5;pointer-events:none;"':''}>
@@ -1179,22 +1486,51 @@
     /* ── Category / Filter ── */
     function setCategory(cat) {
       currentCategory = cat;
+      const lower = cat.toLowerCase();
       document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('active'));
       document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-      const catEl = document.getElementById(`cat-${cat}`);
+
+      const catEl = document.getElementById(`cat-${lower}`);
       if (catEl) catEl.classList.add('active');
-      const tabEl = document.getElementById(`tab-${cat}`);
+      const tabEl = document.getElementById(`tab-${lower}`);
       if (tabEl) tabEl.classList.add('active');
+
       renderProducts();
     }
+
     function filterProducts() {
-      searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
+      const inp = document.getElementById('search-input');
+      searchTerm = inp.value.trim().toLowerCase();
+      const clearBtn = document.getElementById('search-clear-btn');
+      if (clearBtn) clearBtn.style.display = searchTerm ? 'inline-block' : 'none';
       renderProducts();
     }
+
+    function clearSearch() {
+      const inp = document.getElementById('search-input');
+      inp.value = '';
+      searchTerm = '';
+      const clearBtn = document.getElementById('search-clear-btn');
+      if (clearBtn) clearBtn.style.display = 'none';
+      renderProducts();
+    }
+
     function sortProducts() {
       sortMode = document.getElementById('sort-select').value;
       renderProducts();
     }
+
+    // Keyboard shortcut F2 to focus search
+    window.addEventListener('keydown', e => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        const inp = document.getElementById('search-input');
+        if (inp) {
+          inp.focus();
+          inp.select();
+        }
+      }
+    });
 
     /* ── Toast ── */
     function showToast(msg, type='success') {
