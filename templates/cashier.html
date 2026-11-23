@@ -611,14 +611,183 @@
       border: 1px solid #334155;
     }
 
-    /* Scanner HUD Flash */
+    /* Scanner HUD Flash & Viewport Pulses */
     .scanner-active-flash {
       animation: scannerFlash 0.35s ease;
     }
     @keyframes scannerFlash {
       0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.9); }
-      50% { box-shadow: 0 0 16px 4px rgba(74, 222, 128, 0.7); }
+      50% { box-shadow: 0 0 20px 6px rgba(74, 222, 128, 0.7); }
       100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+    }
+    .scanner-error-flash {
+      animation: scannerErrorFlash 0.4s ease;
+    }
+    @keyframes scannerErrorFlash {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.9); }
+      50% { box-shadow: 0 0 20px 6px rgba(239, 68, 68, 0.7); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    /* Viewport Perimeter HUD Pulse (Green on Valid Scan, Red on Error) */
+    .scanner-hud-pulse {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9998;
+      opacity: 0;
+      transition: opacity .1s ease-out;
+    }
+    .scanner-hud-pulse.pulse-green {
+      box-shadow: inset 0 0 0 6px #22c55e, inset 0 0 50px rgba(34, 197, 94, 0.55);
+      animation: hudPulseAnim 0.55s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+    }
+    .scanner-hud-pulse.pulse-red {
+      box-shadow: inset 0 0 0 6px #ef4444, inset 0 0 50px rgba(239, 68, 68, 0.55);
+      animation: hudPulseAnim 0.55s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+    }
+    @keyframes hudPulseAnim {
+      0% { opacity: 0; transform: scale(1.02); }
+      20% { opacity: 1; transform: scale(1); }
+      80% { opacity: 0.85; }
+      100% { opacity: 0; transform: scale(1); }
+    }
+
+    /* Floating Scanner HUD Banner */
+    .scanner-hud-banner {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-90px);
+      z-index: 9999;
+      background: rgba(11, 28, 48, 0.96);
+      backdrop-filter: blur(10px);
+      border: 2px solid #22c55e;
+      border-radius: 14px;
+      padding: 10px 22px;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4), 0 0 25px rgba(34, 197, 94, 0.45);
+      transition: transform 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.25s ease;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .scanner-hud-banner.active-success {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      border-color: #22c55e;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4), 0 0 35px rgba(34, 197, 94, 0.55);
+    }
+    .scanner-hud-banner.active-error {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      border-color: #ef4444;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4), 0 0 35px rgba(239, 68, 68, 0.55);
+    }
+    .scanner-hud-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+    .scanner-hud-banner.active-error .scanner-hud-icon {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
+    .scanner-hud-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .scanner-hud-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      color: #ffffff;
+    }
+    .scanner-hud-sub {
+      font-size: 11.5px;
+      color: #cbd5e1;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .scanner-hud-badge {
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: #006d30;
+      color: #95f8a7;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .scanner-hud-banner.active-error .scanner-hud-badge {
+      background: #7f1d1d;
+      color: #fca5a5;
+    }
+
+    /* Subbar under scanner input */
+    .scanner-subbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: #f1f8f3;
+      border: 1px solid #d2e9d9;
+      border-radius: 10px;
+      padding: 6px 14px;
+    }
+    .scanner-subbar-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .hw-pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+      animation: pulseGreen 1.5s infinite;
+    }
+    @keyframes pulseGreen {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+    .scanner-sim-pills {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .sim-chip {
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 10.5px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: #334155;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .sim-chip:hover {
+      background: #006d30;
+      color: white;
+      border-color: #006d30;
+    }
+    .sim-chip-err:hover {
+      background: #dc2626;
+      color: white;
+      border-color: #dc2626;
     }
 
     /* Z-Report Slip Styling */
@@ -854,6 +1023,21 @@
 </head>
 <body>
 
+  <!-- Viewport Perimeter HUD Pulse -->
+  <div id="scanner-hud-pulse" class="scanner-hud-pulse"></div>
+
+  <!-- Floating Scanner HUD Banner -->
+  <div id="scanner-hud-banner" class="scanner-hud-banner">
+    <div class="scanner-hud-icon" id="scanner-hud-icon">
+      <span class="material-icons">qr_code_scanner</span>
+    </div>
+    <div class="scanner-hud-content">
+      <div class="scanner-hud-title" id="scanner-hud-title">BARCODE SCANNED</div>
+      <div class="scanner-hud-sub" id="scanner-hud-sub">89000001 · Added to Tape</div>
+    </div>
+    <div class="scanner-hud-badge" id="scanner-hud-badge">VALID</div>
+  </div>
+
   <!-- ═══ TOP POS STATUS BAR ═══ -->
   <header class="pos-header">
     <div class="pos-brand">
@@ -915,6 +1099,22 @@
           <button class="btn btn-primary" onclick="handleScanSubmit()" style="height:44px;padding:0 18px;gap:6px;">
             <span class="material-icons">add_shopping_cart</span> Ring Up
           </button>
+        </div>
+      </div>
+
+      <!-- Hardware Scanner Live Indicator & Quick Simulator Pills -->
+      <div class="scanner-subbar">
+        <div class="scanner-subbar-left">
+          <span class="hw-pulse-dot"></span>
+          <span style="font-size:11px;font-weight:700;color:#006d30;">GLOBAL HARDWARE SCANNER ACTIVE</span>
+          <span style="font-size:11px;color:#64748b;">(Auto-detects keystroke bursts anywhere on page &lt;80ms)</span>
+        </div>
+        <div class="scanner-sim-pills">
+          <span style="font-size:10.5px;font-weight:700;color:#64748b;">Simulate Scan:</span>
+          <button type="button" class="sim-chip" onclick="simulateHardwareScan('89000001')" title="Simulate scanning Rice">🌾 89000001 (Rice)</button>
+          <button type="button" class="sim-chip" onclick="simulateHardwareScan('89000012')" title="Simulate scanning Coffee">☕ 89000012 (Coffee)</button>
+          <button type="button" class="sim-chip" onclick="simulateHardwareScan('GP-MIL')" title="Simulate scanning SKU GP-MIL">🥛 GP-MIL (Milk)</button>
+          <button type="button" class="sim-chip sim-chip-err" onclick="simulateHardwareScan('99999999')" title="Simulate invalid scan">⚠️ 99999999 (Error)</button>
         </div>
       </div>
 
@@ -1234,18 +1434,69 @@
       } catch (e) {}
     }
 
-    function triggerScannerFlash() {
+    // Trigger Visual HUD Green Pulse (Valid Scan) or Red Error Pulse
+    function triggerScannerHUD(success = true, code = '', item = null) {
+      // 1. Viewport Perimeter HUD Pulse
+      const pulseEl = document.getElementById('scanner-hud-pulse');
+      if (pulseEl) {
+        pulseEl.className = 'scanner-hud-pulse ' + (success ? 'pulse-green' : 'pulse-red');
+        setTimeout(() => { pulseEl.className = 'scanner-hud-pulse'; }, 600);
+      }
+
+      // 2. Floating Scanner HUD Banner
+      const banner = document.getElementById('scanner-hud-banner');
+      const title = document.getElementById('scanner-hud-title');
+      const sub = document.getElementById('scanner-hud-sub');
+      const badge = document.getElementById('scanner-hud-badge');
+      const icon = document.getElementById('scanner-hud-icon');
+      if (banner) {
+        if (success && item) {
+          banner.className = 'scanner-hud-banner active-success';
+          if (icon) icon.innerHTML = '<span class="material-icons">qr_code_scanner</span>';
+          if (title) title.textContent = `SCANNED: ${capitalize(item.name)}`;
+          if (sub) sub.textContent = `Barcode: ${item.barcode || code} · SKU: ${item.sku || 'GP'} · ₹${item.price.toFixed(2)}`;
+          if (badge) { badge.textContent = 'ADDED TO TAPE'; }
+        } else {
+          banner.className = 'scanner-hud-banner active-error';
+          if (icon) icon.innerHTML = '<span class="material-icons">error_outline</span>';
+          if (title) title.textContent = 'UNRECOGNIZED BARCODE / SKU';
+          if (sub) sub.textContent = `Code: "${code}" not found in catalog`;
+          if (badge) { badge.textContent = 'ERROR 260Hz'; }
+        }
+        clearTimeout(banner._timer);
+        banner._timer = setTimeout(() => {
+          banner.className = 'scanner-hud-banner';
+        }, 1800);
+      }
+
+      // 3. Top Header Strip Status
+      const hwText = document.getElementById('hw-scanner-text');
+      const hwDot = document.getElementById('hw-scanner-dot');
+      if (hwText) {
+        hwText.textContent = success ? `✓ ${code}` : `✗ ${code}`;
+        hwText.style.color = success ? '#4ade80' : '#f87171';
+        clearTimeout(hwText._timer);
+        hwText._timer = setTimeout(() => {
+          hwText.textContent = 'Laser Ready';
+          hwText.style.color = '';
+        }, 1800);
+      }
+      if (hwDot) {
+        hwDot.style.background = success ? '#38bdf8' : '#ef4444';
+        setTimeout(() => { hwDot.style.background = '#4ade80'; }, 350);
+      }
+
+      // 4. Scanner Panel Glow
       const panel = document.querySelector('.scanner-panel');
-      const dot = document.getElementById('hw-scanner-dot');
       if (panel) {
-        panel.classList.remove('scanner-active-flash');
+        panel.classList.remove('scanner-active-flash', 'scanner-error-flash');
         void panel.offsetWidth;
-        panel.classList.add('scanner-active-flash');
+        panel.classList.add(success ? 'scanner-active-flash' : 'scanner-error-flash');
       }
-      if (dot) {
-        dot.style.background = '#38bdf8';
-        setTimeout(() => { dot.style.background = '#4ade80'; }, 300);
-      }
+    }
+
+    function triggerScannerFlash(success = true) {
+      triggerScannerHUD(success, '', null);
     }
 
     // Load products and initialize POS
@@ -1331,27 +1582,15 @@
     }
 
     function handleScanSubmit() {
-      const raw = document.getElementById('barcode-input').value.trim().toLowerCase();
+      const raw = document.getElementById('barcode-input').value.trim();
       const qty = parseInt(document.getElementById('scan-qty').value) || 1;
       if (!raw) return;
 
-      // Find match by Name, SKU, or Barcode
-      const found = allProducts.find(p =>
-        p.name.toLowerCase() === raw ||
-        (p.sku && p.sku.toLowerCase() === raw) ||
-        (p.barcode && p.barcode === raw)
-      );
-
-      if (found) {
-        addToCart(found.name, qty);
-        playBeep(true);
-        triggerScannerFlash();
+      const success = scanBarcodeOrSKU(raw, qty);
+      if (success) {
         document.getElementById('barcode-input').value = '';
         document.getElementById('scan-qty').value = '1';
         document.getElementById('barcode-input').focus();
-      } else {
-        playBeep(false);
-        showToast(`Item or barcode "${raw}" not recognized`, 'error');
       }
     }
 
@@ -1361,17 +1600,16 @@
 
     function setupGlobalScannerListener() {
       window.addEventListener("keydown", (e) => {
-        // Do not intercept hotkeys or when receipt/Z-report modal is open
+        // Do not intercept browser hotkeys (Ctrl+R, Alt+F4, etc.)
         if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+        // Do not intercept when receipt modal or Z-report modal is open
         const recModal = document.getElementById('receipt-modal');
         const zModal = document.getElementById('zreport-modal');
         if ((recModal && recModal.classList.contains('open')) ||
             (zModal && zModal.classList.contains('open'))) {
           return;
         }
-
-        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
-        const activeId = document.activeElement ? document.activeElement.id : "";
 
         const now = Date.now();
         const diff = now - lastKeyTime;
@@ -1386,37 +1624,70 @@
           const code = scannerBuffer.trim();
           if (code.length >= 3) {
             e.preventDefault();
-            const success = scanBarcodeOrSKU(code);
+            e.stopPropagation();
             scannerBuffer = "";
-            if (activeId === 'barcode-input') {
-              document.getElementById('barcode-input').value = '';
+            scanBarcodeOrSKU(code, 1);
+            if (document.activeElement && document.activeElement.id === 'barcode-input') {
+              document.activeElement.value = '';
             }
           }
         } else if (e.key.length === 1) {
           scannerBuffer += e.key;
         }
-      });
+      }, true); // Use capture phase to intercept anywhere on the page
     }
 
-    function scanBarcodeOrSKU(code) {
+    // Match barcode, SKU, or item name and add immediately to tape
+    function scanBarcodeOrSKU(code, qty = 1) {
       const raw = code.toLowerCase().trim();
-      const found = allProducts.find(p =>
-        p.name.toLowerCase() === raw ||
-        (p.sku && p.sku.toLowerCase() === raw) ||
-        (p.barcode && p.barcode === raw)
-      );
+      const rawNorm = raw.replace(/\s+/g, '_');
+
+      const found = allProducts.find(p => {
+        const pName = p.name.toLowerCase();
+        const pSku = (p.sku || '').toLowerCase();
+        const pBarcode = (p.barcode || '').toLowerCase();
+        return (
+          pBarcode === raw ||
+          pSku === raw ||
+          pName === raw ||
+          pName === rawNorm ||
+          pName.replace(/_/g, ' ') === raw
+        );
+      });
 
       if (found) {
-        addToCart(found.name, 1);
-        playBeep(true);
-        triggerScannerFlash();
+        addToCart(found.name, qty);
+        playBeep(true); // 1760Hz success chime
+        triggerScannerHUD(true, code, found); // Visual HUD green pulse
         showToast(`Scanned: ${capitalize(found.name)} (${found.barcode || found.sku})`, 'success');
         return true;
       } else {
-        playBeep(false);
-        showToast(`Scanned barcode/SKU "${code}" not found in catalog`, 'error');
+        playBeep(false); // 260Hz error buzzer
+        triggerScannerHUD(false, code, null); // Visual HUD red error pulse
+        showToast(`Barcode / SKU "${code}" unrecognized in catalog`, 'error');
         return false;
       }
+    }
+
+    // Rapid simulator for testing hardware barcode scanner burst (<80ms) in browser
+    function simulateHardwareScan(code) {
+      scannerBuffer = "";
+      lastKeyTime = Date.now();
+      let i = 0;
+      function burst() {
+        if (i < code.length) {
+          const ch = code[i++];
+          const ev = new KeyboardEvent('keydown', { key: ch, bubbles: true, cancelable: true });
+          window.dispatchEvent(ev);
+          setTimeout(burst, 12); // 12ms between keys (well below 80ms)
+        } else {
+          setTimeout(() => {
+            const enterEv = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+            window.dispatchEvent(enterEv);
+          }, 12);
+        }
+      }
+      burst();
     }
 
     // Cart Management
