@@ -17,7 +17,7 @@ PRODUCTS_CSV  = os.path.join(DATA_DIR, "products.csv")
 SALES_CSV     = os.path.join(DATA_DIR, "sales.csv")
 
 PRODUCTS_FIELDS = ["name", "price", "stock", "category"]
-SALES_FIELDS    = ["session_id", "item_name", "qty", "unit_price", "total", "sold_at"]
+SALES_FIELDS    = ["session_id", "item_name", "qty", "unit_price", "total", "sold_at", "payment_method"]
 
 # Default stock loaded when products.csv doesn't exist yet
 DEFAULT_PRODUCTS = [
@@ -41,11 +41,28 @@ def init_db():
     if not os.path.exists(PRODUCTS_CSV):
         _write_products(DEFAULT_PRODUCTS)
 
-    # sales.csv — just create a header-only file if missing
+    # sales.csv — just create a header-only file if missing, or migrate header if needed
     if not os.path.exists(SALES_CSV):
         with open(SALES_CSV, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
             writer.writeheader()
+    else:
+        # Check if header needs migration to include payment_method
+        try:
+            with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
+                first_line = f.readline().strip()
+            if "payment_method" not in first_line:
+                with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
+                    reader = list(csv.DictReader(f))
+                with open(SALES_CSV, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
+                    writer.writeheader()
+                    for r in reader:
+                        if "payment_method" not in r or not r["payment_method"]:
+                            r["payment_method"] = "Cash"
+                        writer.writerow(r)
+        except Exception:
+            pass
 
 
 # ── Internal helpers ─────────────────────────────────────────────────
@@ -118,24 +135,98 @@ def add_product(name, price, qty, category="General"):
 
 # ── Sales API ─────────────────────────────────────────────────────────
 
-def record_sale(session_id, item_name, qty, unit_price):
+def record_sale(session_id, item_name, qty, unit_price, payment_method="Cash"):
     """Append one sale line to sales.csv."""
     with open(SALES_CSV, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
         writer.writerow({
-            "session_id": session_id,
-            "item_name":  item_name,
-            "qty":        qty,
-            "unit_price": unit_price,
-            "total":      round(qty * unit_price, 2),
-            "sold_at":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "session_id":     session_id,
+            "item_name":      item_name,
+            "qty":            qty,
+            "unit_price":     unit_price,
+            "total":          round(qty * unit_price, 2),
+            "sold_at":        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "payment_method": payment_method or "Cash",
         })
 
 
 def get_sales_history(limit=50):
     """Return the last `limit` sales rows as list of dicts (newest first)."""
     rows = []
-    with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            rows.append(dict(row))
+    if os.path.exists(SALES_CSV):
+        with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                rows.append(dict(row))
     return list(reversed(rows))[:limit]
+
+
+def get_z_report(target_date=None):
+    """
+    Generate an End-of-Day (EOD) Z-Report summary for the specified date (YYYY-MM-DD).
+    Defaults to today's date if target_date is None.
+    """
+    if not target_date:
+        target_date = datetime.now().strftime("%Y-%m-%d")
+
+    sales = []
+    if os.path.exists(SALES_CSV):
+        with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                sold_at = row.get("sold_at", "")
+                if sold_at.startswith(target_date):
+                    sales.append(row)
+
+    total_items_sold = sum(int(s.get("qty", 1)) for s in sales)
+    net_sales = sum(float(s.get("total", 0.0)) for s in sales)
+    tax_rate = 0.0825
+    tax_collected = round(net_sales * tax_rate, 2)
+    gross_total = round(net_sales + tax_collected, 2)
+
+    # Unique transactions (by session_id)
+    unique_sessions = set(s.get("session_id") for s in sales if s.get("session_id"))
+    transaction_count = len(unique_sessions) if unique_sessions else (1 if sales else 0)
+
+    # Breakdown by payment method
+    by_payment = {"Cash": 0.0, "UPI": 0.0, "Card": 0.0}
+    for s in sales:
+        method = s.get("payment_method") or "Cash"
+        if method not in by_payment:
+            by_payment[method] = 0.0
+        by_payment[method] += float(s.get("total", 0.0))
+
+    # Top selling products
+    product_counts = {}
+    product_revenue = {}
+    for s in sales:
+        item = s.get("item_name", "Unknown")
+        qty = int(s.get("qty", 1))
+        tot = float(s.get("total", 0.0))
+        product_counts[item] = product_counts.get(item, 0) + qty
+        product_revenue[item] = product_revenue.get(item, 0.0) + tot
+
+    top_products = []
+    for item in sorted(product_counts, key=product_counts.get, reverse=True)[:5]:
+        top_products.append({
+            "name": item,
+            "qty": product_counts[item],
+            "revenue": round(product_revenue[item] * (1 + tax_rate), 2)
+        })
+
+    return {
+        "date": target_date,
+        "lane": "Lane 04",
+        "cashier": "Lane 04 Terminal",
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "transaction_count": transaction_count,
+        "total_items_sold": total_items_sold,
+        "net_sales": round(net_sales, 2),
+        "tax_rate": "8.25%",
+        "tax_collected": tax_collected,
+        "gross_total": gross_total,
+        "payment_breakdown": {
+            "Cash": round(by_payment.get("Cash", 0.0) * (1 + tax_rate), 2),
+            "UPI": round(by_payment.get("UPI", 0.0) * (1 + tax_rate), 2),
+            "Card": round(by_payment.get("Card", 0.0) * (1 + tax_rate), 2),
+        },
+        "top_products": top_products
+    }

@@ -4,7 +4,7 @@ import uuid
 
 from database import (
     init_db, get_all_products, get_product,
-    update_stock, add_product, record_sale, get_sales_history
+    update_stock, add_product, record_sale, get_sales_history, get_z_report
 )
 
 app = Flask(__name__)
@@ -138,6 +138,15 @@ def api_checkout():
     if not cart:
         return jsonify({"success": False, "message": "Your cart is empty!"}), 400
 
+    data = request.json or {}
+    payment_method = str(data.get("payment_method", "Cash")).strip()
+    if payment_method not in ["Cash", "UPI", "Card"]:
+        payment_method = "Cash"
+    try:
+        tender_amount = float(data.get("tender_amount", 0.0) or 0.0)
+    except Exception:
+        tender_amount = 0.0
+
     receipt = []
     for name, qty in cart.items():
         prod = get_product(name)
@@ -145,11 +154,31 @@ def api_checkout():
         total = price * qty
         receipt.append({"name": name, "qty": qty, "price": price, "total": total})
         # Persist each sale line to the database
-        record_sale(sid, name, qty, price)
+        record_sale(sid, name, qty, price, payment_method=payment_method)
 
     grand_total = sum(i["total"] for i in receipt)
+    tax = round(grand_total * 0.0825, 2)
+    final_due = round(grand_total + tax, 2)
+    change_due = max(0.0, round(tender_amount - final_due, 2)) if payment_method == "Cash" and tender_amount >= final_due else 0.0
+
     cart.clear()
-    return jsonify({"success": True, "receipt": receipt, "grand_total": grand_total})
+    return jsonify({
+        "success": True,
+        "receipt": receipt,
+        "grand_total": grand_total,
+        "tax": tax,
+        "final_due": final_due,
+        "payment_method": payment_method,
+        "tender_amount": tender_amount,
+        "change_due": change_due
+    })
+
+
+@app.route("/api/cashier/z_report")
+def api_cashier_z_report():
+    target_date = request.args.get("date")
+    report = get_z_report(target_date)
+    return jsonify({"success": True, "report": report})
 
 
 # ── Auth API ─────────────────────────────────────────────────────────

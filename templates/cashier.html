@@ -508,6 +508,152 @@
       letter-spacing: -0.02em;
     }
 
+    /* Payment Method Tabs & Panes */
+    .payment-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .pay-tab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      background: white;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 7px 4px;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #334155;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .pay-tab:hover {
+      border-color: #006d30;
+      color: #006d30;
+    }
+    .pay-tab.active {
+      background: #006d30;
+      color: white;
+      border-color: #006d30;
+      box-shadow: 0 2px 8px rgba(0,109,48,0.25);
+    }
+    .pay-tab.active span {
+      color: white !important;
+    }
+
+    .pay-pane {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .pay-pane.active {
+      display: flex;
+    }
+
+    .upi-qr-card {
+      background: white;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .upi-qr-img {
+      width: 125px;
+      height: 125px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      padding: 4px;
+      background: white;
+      margin: 4px 0;
+    }
+    .upi-pulse-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #0284c7;
+      background: #e0f2fe;
+      padding: 3px 8px;
+      border-radius: 20px;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(0.98); }
+    }
+
+    .card-pos-card {
+      background: #1e293b;
+      color: white;
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(15,23,42,0.2);
+    }
+    .card-pos-screen {
+      background: #0f172a;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #38bdf8;
+      border: 1px solid #334155;
+    }
+
+    /* Scanner HUD Flash */
+    .scanner-active-flash {
+      animation: scannerFlash 0.35s ease;
+    }
+    @keyframes scannerFlash {
+      0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.9); }
+      50% { box-shadow: 0 0 16px 4px rgba(74, 222, 128, 0.7); }
+      100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+    }
+
+    /* Z-Report Slip Styling */
+    .zreport-slip {
+      background: #ffffff;
+      border: 1px dashed #64748b;
+      border-radius: 10px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace, inherit;
+      color: #0f172a;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .zreport-header {
+      text-align: center;
+      border-bottom: 2px dashed #0f172a;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+    }
+    .zreport-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2.5px 0;
+    }
+    .zreport-divider {
+      border-top: 1px dashed #cbd5e1;
+      margin: 8px 0;
+    }
+    .zreport-double-divider {
+      border-top: 2px solid #0f172a;
+      border-bottom: 2px solid #0f172a;
+      height: 3px;
+      margin: 8px 0;
+    }
+
     /* Tender cash buttons */
     .tender-row {
       display: grid;
@@ -721,9 +867,9 @@
         <span class="hw-dot"></span>
         Scale: <strong id="hw-scale-read">0.000 kg</strong>
       </div>
-      <div class="hw-status">
-        <span class="hw-dot"></span>
-        Scanner: <strong>Laser Ready</strong>
+      <div class="hw-status" id="hw-scanner-status">
+        <span class="hw-dot" id="hw-scanner-dot"></span>
+        Scanner: <strong id="hw-scanner-text">Laser Ready</strong>
       </div>
       <div class="hw-status">
         <span class="hw-dot"></span>
@@ -734,7 +880,10 @@
     <div class="pos-cashier-chip">
       <span class="material-icons" style="font-size:18px;color:#94a3b8;">badge</span>
       <span>Cashier: <strong>Lane 04 (Morning Shift)</strong></span>
-      <a href="/" class="btn btn-sm btn-secondary" style="margin-left:12px;color:white;background:rgba(255,255,255,0.1);border-color:transparent;" title="Switch Terminal / Logout">
+      <button class="btn btn-sm btn-secondary" onclick="openZReportModal()" style="margin-left:8px;color:#95f8a7;background:rgba(0,109,48,0.25);border:1px solid #006d30;display:inline-flex;align-items:center;gap:4px;" title="Daily End-of-Day Register Report">
+        <span class="material-icons" style="font-size:15px;">assessment</span> Z-Report (EOD)
+      </button>
+      <a href="/" class="btn btn-sm btn-secondary" style="margin-left:8px;color:white;background:rgba(255,255,255,0.1);border-color:transparent;" title="Switch Terminal / Logout">
         <span class="material-icons" style="font-size:15px;">logout</span> Switch
       </a>
     </div>
@@ -873,27 +1022,86 @@
           <span class="grand-val" id="tape-grand">₹0.00</span>
         </div>
 
-        <!-- Tender Presets -->
-        <div class="tender-row">
-          <div class="tender-pill" onclick="setTenderExact()">Exact</div>
-          <div class="tender-pill" onclick="setTender(100)">₹100</div>
-          <div class="tender-pill" onclick="setTender(200)">₹200</div>
-          <div class="tender-pill" onclick="setTender(500)">₹500</div>
+        <!-- Payment Method Tabs -->
+        <div class="payment-tabs">
+          <button type="button" class="pay-tab active" id="tab-Cash" onclick="selectPaymentMode('Cash')">
+            <span class="material-icons" style="font-size:16px;color:#006d30;">payments</span> Cash
+          </button>
+          <button type="button" class="pay-tab" id="tab-UPI" onclick="selectPaymentMode('UPI')">
+            <span class="material-icons" style="font-size:16px;color:#0284c7;">qr_code_2</span> UPI QR
+          </button>
+          <button type="button" class="pay-tab" id="tab-Card" onclick="selectPaymentMode('Card')">
+            <span class="material-icons" style="font-size:16px;color:#4f46e5;">credit_card</span> Card POS
+          </button>
         </div>
 
-        <div class="tender-input-wrap">
-          <span style="font-size:12px;font-weight:700;color:var(--outline);">Tendered:</span>
-          <input id="tender-amt" class="tender-input" type="number" placeholder="₹ Amount" oninput="calculateChange()"/>
+        <!-- CASH PAYMENT PANE -->
+        <div id="pane-Cash" class="pay-pane active">
+          <!-- Tender Presets -->
+          <div class="tender-row">
+            <div class="tender-pill" onclick="setTenderExact()">Exact</div>
+            <div class="tender-pill" onclick="setTender(100)">₹100</div>
+            <div class="tender-pill" onclick="setTender(200)">₹200</div>
+            <div class="tender-pill" onclick="setTender(500)">₹500</div>
+          </div>
+
+          <div class="tender-input-wrap">
+            <span style="font-size:12px;font-weight:700;color:var(--outline);">Tendered:</span>
+            <input id="tender-amt" class="tender-input" type="number" placeholder="₹ Amount" oninput="calculateChange()"/>
+          </div>
+
+          <div class="change-box" id="change-box" style="display:none;">
+            <span>Change Due to Customer:</span>
+            <strong id="change-due">₹0.00</strong>
+          </div>
         </div>
 
-        <div class="change-box" id="change-box" style="display:none;">
-          <span>Change Due to Customer:</span>
-          <strong id="change-due">₹0.00</strong>
+        <!-- UPI / QR CODE PANE -->
+        <div id="pane-UPI" class="pay-pane">
+          <div class="upi-qr-card">
+            <div style="font-size:11.5px;font-weight:800;color:#0b1c30;display:flex;align-items:center;gap:6px;">
+              <span class="material-icons" style="font-size:16px;color:#0284c7;">qr_code_scanner</span>
+              Scan to Pay with Any UPI App
+            </div>
+            <img id="upi-qr-image" class="upi-qr-img" src="" alt="UPI QR Code"/>
+            <div style="font-size:10.5px;color:#475569;margin-top:2px;">
+              UPI ID: <strong>grocerypro@upi</strong> · Lane 04
+            </div>
+            <div style="font-size:13px;font-weight:800;color:#006d30;margin-top:2px;">
+              Amount: <span id="upi-qr-amt">₹0.00</span>
+            </div>
+            <div class="upi-pulse-badge" style="margin-top:6px;">
+              <span class="material-icons" style="font-size:13px;">hourglass_top</span>
+              Waiting for Customer Scan
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD / POS MACHINE PANE -->
+        <div id="pane-Card" class="pay-pane">
+          <div class="card-pos-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;">PAX S900 · LANE 04</span>
+              <span style="font-size:9.5px;background:#059669;padding:2px 6px;border-radius:4px;font-weight:700;">CHIP/NFC READY</span>
+            </div>
+            <div class="card-pos-screen">
+              <div>GROCERYPRO TERMINAL</div>
+              <div style="margin:4px 0;">AMOUNT: <span id="card-pos-amt" style="font-weight:bold;color:#facc15;">₹0.00</span></div>
+              <div style="font-size:9.5px;color:#94a3b8;">TAP, INSERT, OR SWIPE CARD</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:10.5px;color:#cbd5e1;">Card Last 4:</span>
+              <input id="card-last4" type="text" maxlength="4" value="4242" style="width:65px;height:28px;border-radius:6px;border:1px solid #475569;background:#0f172a;color:white;text-align:center;font-weight:bold;font-size:12px;" placeholder="4242"/>
+              <button type="button" class="btn btn-sm" onclick="simulateCardTap()" style="background:#2563eb;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:700;margin-left:auto;">
+                Simulate Tap
+              </button>
+            </div>
+          </div>
         </div>
 
         <button class="charge-btn" id="charge-btn" onclick="finalizeCheckout()" disabled>
-          <span class="material-icons">payments</span>
-          Charge &amp; Print Receipt (F4)
+          <span class="material-icons" id="charge-btn-icon">payments</span>
+          <span id="charge-btn-label">Charge Cash &amp; Print Receipt (F4)</span>
         </button>
       </div>
     </section>
@@ -945,6 +1153,47 @@
     </div>
   </div>
 
+  <!-- Daily Z-Report EOD Modal -->
+  <div class="modal-overlay" id="zreport-modal">
+    <div class="modal" style="max-width:480px; max-height:92vh; display:flex; flex-direction:column; overflow:hidden;">
+      <button class="modal-close" onclick="closeZReportModal()"><span class="material-icons" style="font-size:18px;">close</span></button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-shrink:0;">
+        <div style="width:38px;height:38px;border-radius:10px;background:rgba(0,109,48,.15);display:flex;align-items:center;justify-content:center;">
+          <span class="material-icons" style="color:#006d30;font-size:22px;">assessment</span>
+        </div>
+        <div>
+          <div class="modal-title" style="margin-bottom:0;font-size:17px;">Daily Z-Report (EOD Closeout)</div>
+          <div style="font-size:11px;color:var(--outline);">Official Register Balance &amp; Revenue Reconciliation</div>
+        </div>
+      </div>
+      
+      <!-- Scrollable Z-Report Slip -->
+      <div style="flex:1; overflow-y:auto; padding-right:2px;">
+        <div id="zreport-slip-container" class="zreport-slip">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;flex-shrink:0;">
+        <button class="btn btn-primary btn-full btn-lg" onclick="printZReport()" style="gap:8px;">
+          <span class="material-icons">print</span> Print Official Z-Report
+        </button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="btn-download" onclick="downloadZReportTXT()" title="Download text report">
+            <span class="material-icons" style="font-size:16px;">receipt</span> Download Text (.txt)
+          </button>
+          <button class="btn-download" onclick="downloadZReportDOCX()" title="Download Word report">
+            <span class="material-icons" style="font-size:16px;color:#2a75d3;">description</span> Download Word (.doc)
+          </button>
+        </div>
+        <button class="btn btn-full btn-secondary" onclick="closeZReportModal()" style="font-size:13px;padding:8px;">
+          Close Summary
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast notifications -->
   <div class="toast-container" id="toast-container"></div>
 
@@ -954,12 +1203,58 @@
     let currentGrandTotal = 0;
     let currentReceiptData = null;
     let currentScaleWeight = 1.5;
+    let currentPaymentMethod = 'Cash';
+    let audioCtx = null;
+
+    // Web Audio API Synthesizer (crisp POS chime & error buzzer)
+    function playBeep(success = true) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (success) {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(1760, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.09);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.09);
+        } else {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(260, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.18);
+        }
+      } catch (e) {}
+    }
+
+    function triggerScannerFlash() {
+      const panel = document.querySelector('.scanner-panel');
+      const dot = document.getElementById('hw-scanner-dot');
+      if (panel) {
+        panel.classList.remove('scanner-active-flash');
+        void panel.offsetWidth;
+        panel.classList.add('scanner-active-flash');
+      }
+      if (dot) {
+        dot.style.background = '#38bdf8';
+        setTimeout(() => { dot.style.background = '#4ade80'; }, 300);
+      }
+    }
 
     // Load products and initialize POS
     async function initPOS() {
       await loadProducts();
       await loadCart();
       setupBarcodeListener();
+      setupGlobalScannerListener();
+      selectPaymentMode('Cash');
     }
 
     async function loadProducts() {
@@ -1049,11 +1344,78 @@
 
       if (found) {
         addToCart(found.name, qty);
+        playBeep(true);
+        triggerScannerFlash();
         document.getElementById('barcode-input').value = '';
         document.getElementById('scan-qty').value = '1';
         document.getElementById('barcode-input').focus();
       } else {
+        playBeep(false);
         showToast(`Item or barcode "${raw}" not recognized`, 'error');
+      }
+    }
+
+    // Hardware Barcode Scanner Global Event Listener
+    let scannerBuffer = "";
+    let lastKeyTime = Date.now();
+
+    function setupGlobalScannerListener() {
+      window.addEventListener("keydown", (e) => {
+        // Do not intercept hotkeys or when receipt/Z-report modal is open
+        if (e.ctrlKey || e.altKey || e.metaKey) return;
+        const recModal = document.getElementById('receipt-modal');
+        const zModal = document.getElementById('zreport-modal');
+        if ((recModal && recModal.classList.contains('open')) ||
+            (zModal && zModal.classList.contains('open'))) {
+          return;
+        }
+
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+        const activeId = document.activeElement ? document.activeElement.id : "";
+
+        const now = Date.now();
+        const diff = now - lastKeyTime;
+        lastKeyTime = now;
+
+        // Hardware scanners emulate rapid keyboard typing (< 80ms keystroke gap)
+        if (diff > 80) {
+          scannerBuffer = "";
+        }
+
+        if (e.key === "Enter") {
+          const code = scannerBuffer.trim();
+          if (code.length >= 3) {
+            e.preventDefault();
+            const success = scanBarcodeOrSKU(code);
+            scannerBuffer = "";
+            if (activeId === 'barcode-input') {
+              document.getElementById('barcode-input').value = '';
+            }
+          }
+        } else if (e.key.length === 1) {
+          scannerBuffer += e.key;
+        }
+      });
+    }
+
+    function scanBarcodeOrSKU(code) {
+      const raw = code.toLowerCase().trim();
+      const found = allProducts.find(p =>
+        p.name.toLowerCase() === raw ||
+        (p.sku && p.sku.toLowerCase() === raw) ||
+        (p.barcode && p.barcode === raw)
+      );
+
+      if (found) {
+        addToCart(found.name, 1);
+        playBeep(true);
+        triggerScannerFlash();
+        showToast(`Scanned: ${capitalize(found.name)} (${found.barcode || found.sku})`, 'success');
+        return true;
+      } else {
+        playBeep(false);
+        showToast(`Scanned barcode/SKU "${code}" not found in catalog`, 'error');
+        return false;
       }
     }
 
@@ -1090,6 +1452,8 @@
         chargeBtn.disabled = true;
         currentGrandTotal = 0;
         calculateChange();
+        updateUpiQr();
+        updateCardPos();
         return;
       }
 
@@ -1121,6 +1485,8 @@
 
       feed.scrollTop = feed.scrollHeight;
       calculateChange();
+      updateUpiQr();
+      updateCardPos();
     }
 
     async function addToCart(name, qty) {
@@ -1164,6 +1530,58 @@
       showToast('Register tape voided / cleared', 'warning');
     }
 
+    // Payment Methods Logic (Cash, UPI QR, Card POS)
+    function selectPaymentMode(mode) {
+      currentPaymentMethod = mode;
+      document.querySelectorAll('.pay-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.pay-pane').forEach(p => p.classList.remove('active'));
+
+      const tab = document.getElementById(`tab-${mode}`);
+      const pane = document.getElementById(`pane-${mode}`);
+      if (tab) tab.classList.add('active');
+      if (pane) pane.classList.add('active');
+
+      const btnIcon = document.getElementById('charge-btn-icon');
+      const btnLabel = document.getElementById('charge-btn-label');
+
+      if (mode === 'Cash') {
+        if (btnIcon) btnIcon.textContent = 'payments';
+        if (btnLabel) btnLabel.textContent = 'Charge Cash & Print Receipt (F4)';
+      } else if (mode === 'UPI') {
+        if (btnIcon) btnIcon.textContent = 'qr_code_2';
+        if (btnLabel) btnLabel.textContent = 'Confirm UPI & Print Receipt (F4)';
+        updateUpiQr();
+      } else if (mode === 'Card') {
+        if (btnIcon) btnIcon.textContent = 'credit_card';
+        if (btnLabel) btnLabel.textContent = 'Authorize Card & Print Receipt (F4)';
+        updateCardPos();
+      }
+    }
+
+    function updateUpiQr() {
+      const qrAmt = document.getElementById('upi-qr-amt');
+      const qrImg = document.getElementById('upi-qr-image');
+      if (qrAmt) qrAmt.textContent = '₹' + currentGrandTotal.toFixed(2);
+      if (qrImg) {
+        if (currentGrandTotal > 0) {
+          const upiUri = `upi://pay?pa=grocerypro@upi&pn=GroceryPro%20Retail&am=${currentGrandTotal.toFixed(2)}&cu=INR&tn=Lane04`;
+          qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiUri)}`;
+        } else {
+          qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=upi%3A%2F%2Fpay%3Fpa%3Dgrocerypro%40upi%26pn%3DGroceryPro`;
+        }
+      }
+    }
+
+    function updateCardPos() {
+      const cardAmt = document.getElementById('card-pos-amt');
+      if (cardAmt) cardAmt.textContent = '₹' + currentGrandTotal.toFixed(2);
+    }
+
+    function simulateCardTap() {
+      playBeep(true);
+      showToast('Card contactless tap authorized! (Ref #AUTH-88219)', 'success');
+    }
+
     // Tender & Change Due
     function setTenderExact() {
       document.getElementById('tender-amt').value = currentGrandTotal.toFixed(2);
@@ -1191,21 +1609,47 @@
 
     // Finalize Checkout
     async function finalizeCheckout() {
-      const res = await fetch('/api/checkout', {method: 'POST'});
-      const data = await res.json();
-      if (data.success) {
-        const tax = data.grand_total * 0.0825;
-        const grand = data.grand_total + tax;
-        showReceipt(data.receipt, data.grand_total, tax, grand);
-        await loadCart();
-        document.getElementById('tender-amt').value = '';
-        calculateChange();
-      } else {
-        showToast(data.message || 'Checkout failed', 'error');
+      const tenderVal = parseFloat(document.getElementById('tender-amt').value) || 0;
+      if (currentPaymentMethod === 'Cash' && tenderVal > 0 && tenderVal < currentGrandTotal) {
+        showToast(`Tendered ₹${tenderVal} is less than Balance Due (₹${currentGrandTotal.toFixed(2)})`, 'error');
+        playBeep(false);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            payment_method: currentPaymentMethod,
+            tender_amount: currentPaymentMethod === 'Cash' ? (tenderVal || currentGrandTotal) : currentGrandTotal
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          playBeep(true);
+          showReceipt(
+            data.receipt,
+            data.grand_total,
+            data.tax,
+            data.final_due,
+            data.payment_method || currentPaymentMethod,
+            data.tender_amount || currentGrandTotal,
+            data.change_due || 0
+          );
+          await loadCart();
+          document.getElementById('tender-amt').value = '';
+          calculateChange();
+        } else {
+          playBeep(false);
+          showToast(data.message || 'Checkout failed', 'error');
+        }
+      } catch (e) {
+        showToast('Checkout communication error', 'error');
       }
     }
 
-    function showReceipt(items, subtotal, tax, grand) {
+    function showReceipt(items, subtotal, tax, grand, paymentMethod='Cash', tenderAmount=0, changeDue=0) {
       const now = new Date();
       const receiptId = 'POS4-' + now.getFullYear() +
         String(now.getMonth() + 1).padStart(2, '0') +
@@ -1224,6 +1668,9 @@
         subtotal,
         tax,
         grand,
+        paymentMethod,
+        tenderAmount,
+        changeDue,
         storeName: 'GroceryPro Store',
         storeBranch: 'Downtown Flagship · Lane 04',
         lane: 'Lane 04 (Cashier Terminal)',
@@ -1283,6 +1730,32 @@
             <span class="receipt-grand-label">Final Balance Due</span>
             <span class="receipt-grand-val">₹${d.grand.toFixed(2)}</span>
           </div>
+          <div class="receipt-summary-row" style="margin-top:6px;padding-top:4px;border-top:1px dashed #cbd5e1;">
+            <span>Payment Method</span>
+            <strong style="color:#006d30;">${(d.paymentMethod || 'Cash').toUpperCase()}</strong>
+          </div>
+          ${d.paymentMethod === 'Cash' && d.tenderAmount > 0 ? `
+            <div class="receipt-summary-row">
+              <span>Cash Tendered</span>
+              <span>₹${d.tenderAmount.toFixed(2)}</span>
+            </div>
+            <div class="receipt-summary-row">
+              <span>Change Returned</span>
+              <strong style="color:#006d30;">₹${d.changeDue.toFixed(2)}</strong>
+            </div>
+          ` : ''}
+          ${d.paymentMethod === 'UPI' ? `
+            <div class="receipt-summary-row" style="font-size:10.5px;color:#0284c7;">
+              <span>UPI Ref:</span>
+              <span>grocerypro@upi (Verified)</span>
+            </div>
+          ` : ''}
+          ${d.paymentMethod === 'Card' ? `
+            <div class="receipt-summary-row" style="font-size:10.5px;color:#4f46e5;">
+              <span>Card:</span>
+              <span>•••• •••• •••• 4242 (Auth #88219)</span>
+            </div>
+          ` : ''}
         </div>
 
         <div class="receipt-slip-footer">
@@ -1580,6 +2053,11 @@
             <tr><td>Subtotal:</td><td class="text-right">₹${d.subtotal.toFixed(2)}</td></tr>
             <tr><td>Tax (8.25%):</td><td class="text-right">₹${d.tax.toFixed(2)}</td></tr>
             <tr class="grand-row"><td>TOTAL DUE:</td><td class="text-right">₹${d.grand.toFixed(2)}</td></tr>
+            <tr><td>Payment:</td><td class="text-right"><strong>${d.paymentMethod ? d.paymentMethod.toUpperCase() : 'CASH'}</strong></td></tr>
+            ${d.paymentMethod === 'Cash' && d.tenderAmount > 0 ? `
+              <tr><td>Tendered:</td><td class="text-right">₹${d.tenderAmount.toFixed(2)}</td></tr>
+              <tr><td>Change Due:</td><td class="text-right">₹${d.changeDue.toFixed(2)}</td></tr>
+            ` : ''}
           </table>
           <div class="barcode-box">
             ||||| | |||| ||| |||| | |||||
@@ -1592,6 +2070,232 @@
         </body>
         </html>
       `;
+    }
+
+    // ── Daily Z-Report Functions ──────────────────────────────────────────
+    let currentZReportData = null;
+
+    async function openZReportModal() {
+      try {
+        const res = await fetch('/api/cashier/z_report');
+        const data = await res.json();
+        if (data.success && data.report) {
+          currentZReportData = data.report;
+          renderZReportSlip(data.report);
+          document.getElementById('zreport-modal').classList.add('open');
+        } else {
+          showToast('Failed to generate Z-Report', 'error');
+        }
+      } catch (e) {
+        showToast('Error fetching daily sales summary', 'error');
+      }
+    }
+
+    function closeZReportModal() {
+      document.getElementById('zreport-modal').classList.remove('open');
+    }
+
+    function renderZReportSlip(r) {
+      const container = document.getElementById('zreport-slip-container');
+      container.innerHTML = `
+        <div class="zreport-header">
+          <div style="font-size:16px;font-weight:800;letter-spacing:1px;color:#0b1c30;">GROCERYPRO SUPERMARKET</div>
+          <div style="font-size:11px;font-weight:700;color:#006d30;margin-top:2px;">DAILY REGISTER Z-REPORT (EOD CLOSEOUT)</div>
+          <div style="font-size:10.5px;color:#64748b;margin-top:4px;">
+            Register: <strong>${r.lane}</strong> · Terminal: <strong>${r.cashier}</strong>
+          </div>
+          <div style="font-size:10px;color:#64748b;">
+            Date: <strong>${r.date}</strong> · Generated: ${r.generated_at}
+          </div>
+        </div>
+
+        <div style="font-weight:800;font-size:11px;color:#0b1c30;margin-bottom:4px;text-transform:uppercase;">1. Transaction Summary</div>
+        <div class="zreport-row"><span>Total Completed Transactions:</span><strong>${r.transaction_count}</strong></div>
+        <div class="zreport-row"><span>Total Product Units Sold:</span><strong>${r.total_items_sold}</strong></div>
+        <div class="zreport-row"><span>Net Sales (Pre-Tax):</span><strong>₹${r.net_sales.toFixed(2)}</strong></div>
+        <div class="zreport-row"><span>Sales Tax Collected (8.25%):</span><strong>₹${r.tax_collected.toFixed(2)}</strong></div>
+        
+        <div class="zreport-double-divider"></div>
+        <div class="zreport-row" style="font-size:14px;font-weight:800;color:#006d30;">
+          <span>GROSS REVENUE:</span>
+          <span>₹${r.gross_total.toFixed(2)}</span>
+        </div>
+        <div class="zreport-double-divider"></div>
+
+        <div style="font-weight:800;font-size:11px;color:#0b1c30;margin:8px 0 4px 0;text-transform:uppercase;">2. Tender Reconciliation</div>
+        <div class="zreport-row"><span>💵 Cash in Register:</span><strong>₹${(r.payment_breakdown.Cash || 0).toFixed(2)}</strong></div>
+        <div class="zreport-row"><span>📱 UPI / QR Payments:</span><strong>₹${(r.payment_breakdown.UPI || 0).toFixed(2)}</strong></div>
+        <div class="zreport-row"><span>💳 Card / POS Terminal:</span><strong>₹${(r.payment_breakdown.Card || 0).toFixed(2)}</strong></div>
+
+        <div class="zreport-divider"></div>
+        <div style="font-weight:800;font-size:11px;color:#0b1c30;margin:8px 0 4px 0;text-transform:uppercase;">3. Top Selling Products Today</div>
+        ${r.top_products && r.top_products.length ? r.top_products.map(p => `
+          <div class="zreport-row" style="font-size:11px;">
+            <span>${capitalize(p.name)} (${p.qty}x)</span>
+            <strong>₹${p.revenue.toFixed(2)}</strong>
+          </div>
+        `).join('') : '<div style="color:#94a3b8;font-size:11px;">No product sales recorded today.</div>'}
+
+        <div class="zreport-divider"></div>
+        <div style="text-align:center;font-size:10px;color:#64748b;margin-top:10px;">
+          *** END OF Z-REPORT ***<br/>
+          Official Register Closeout Slip · Lane 04
+        </div>
+      `;
+    }
+
+    function printZReport() {
+      if (!currentZReportData) return;
+      const r = currentZReportData;
+      let iframe = document.getElementById('receipt-print-frame');
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'receipt-print-frame';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+      }
+
+      const slipHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8"/>
+          <title>Z-Report ${r.date}</title>
+          <style>
+            @page { size: 80mm auto; margin: 4mm; }
+            body { font-family: 'Courier New', monospace; font-size: 11px; width: 72mm; margin: 0 auto; color: #000; }
+            .center { text-align: center; }
+            .right { text-align: right; }
+            .bold { font-weight: bold; }
+            .dash { border-top: 1px dashed #000; margin: 6px 0; }
+            .double { border-top: 2px solid #000; border-bottom: 2px solid #000; margin: 6px 0; padding: 4px 0; }
+            .row { display: flex; justify-content: space-between; margin: 2px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="center">
+            <h2 style="margin:0;font-size:15px;">GROCERYPRO STORE</h2>
+            <div style="font-size:10px;">REGISTER CLOSEOUT (Z-REPORT)</div>
+            <div style="font-size:9px;">Date: ${r.date} · Lane 04</div>
+          </div>
+          <div class="dash"></div>
+          <div class="row"><span>Transactions:</span><span class="bold">${r.transaction_count}</span></div>
+          <div class="row"><span>Units Sold:</span><span class="bold">${r.total_items_sold}</span></div>
+          <div class="row"><span>Net Sales:</span><span>₹${r.net_sales.toFixed(2)}</span></div>
+          <div class="row"><span>Tax (8.25%):</span><span>₹${r.tax_collected.toFixed(2)}</span></div>
+          <div class="double row bold">
+            <span>GROSS TOTAL:</span>
+            <span>₹${r.gross_total.toFixed(2)}</span>
+          </div>
+          <div class="dash"></div>
+          <div class="bold" style="margin-bottom:2px;">TENDER SUMMARY:</div>
+          <div class="row"><span>Cash:</span><span>₹${(r.payment_breakdown.Cash || 0).toFixed(2)}</span></div>
+          <div class="row"><span>UPI / QR:</span><span>₹${(r.payment_breakdown.UPI || 0).toFixed(2)}</span></div>
+          <div class="row"><span>Card POS:</span><span>₹${(r.payment_breakdown.Card || 0).toFixed(2)}</span></div>
+          <div class="dash"></div>
+          <div class="center" style="font-size:9px;margin-top:10px;">
+            *** OFFICIAL REGISTER AUDIT TAPE ***<br/>
+            Printed: ${r.generated_at}
+          </div>
+        </body>
+        </html>
+      `;
+
+      const doc = iframe.contentWindow.document;
+      doc.open();
+      doc.write(slipHtml);
+      doc.close();
+      iframe.contentWindow.focus();
+      setTimeout(() => { iframe.contentWindow.print(); }, 250);
+    }
+
+    function downloadZReportTXT() {
+      if (!currentZReportData) return;
+      const r = currentZReportData;
+      const w = 40;
+      const line = '='.repeat(w);
+      const dash = '-'.repeat(w);
+      const center = (str) => {
+        const pad = Math.max(0, Math.floor((w - str.length) / 2));
+        return ' '.repeat(pad) + str;
+      };
+
+      let txt = '';
+      txt += line + '\n';
+      txt += center('GROCERYPRO STORE') + '\n';
+      txt += center('DAILY REGISTER Z-REPORT') + '\n';
+      txt += center('LANE 04 - EOD CLOSEOUT') + '\n';
+      txt += line + '\n';
+      txt += `Date:       ${r.date}\n`;
+      txt += `Generated:  ${r.generated_at}\n`;
+      txt += `Register:   ${r.lane}\n`;
+      txt += dash + '\n';
+      txt += 'SALES TOTALS:\n';
+      txt += `Total Transactions:      ${String(r.transaction_count).padStart(12, ' ')}\n`;
+      txt += `Total Items Sold:        ${String(r.total_items_sold).padStart(12, ' ')}\n`;
+      txt += `Net Sales:              ₹${r.net_sales.toFixed(2).padStart(12, ' ')}\n`;
+      txt += `Tax Collected (8.25%):  ₹${r.tax_collected.toFixed(2).padStart(12, ' ')}\n`;
+      txt += line + '\n';
+      txt += `GROSS REVENUE:          ₹${r.gross_total.toFixed(2).padStart(12, ' ')}\n`;
+      txt += line + '\n';
+      txt += 'TENDER RECONCILIATION:\n';
+      txt += `Cash in Drawer:         ₹${(r.payment_breakdown.Cash || 0).toFixed(2).padStart(12, ' ')}\n`;
+      txt += `UPI / QR Payments:      ₹${(r.payment_breakdown.UPI || 0).toFixed(2).padStart(12, ' ')}\n`;
+      txt += `Card POS Terminals:     ₹${(r.payment_breakdown.Card || 0).toFixed(2).padStart(12, ' ')}\n`;
+      txt += dash + '\n';
+      txt += center('*** END OF REGISTER AUDIT ***') + '\n';
+      txt += line + '\n';
+
+      const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GroceryPro_ZReport_${r.date}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Z-Report downloaded (.txt)!', 'success');
+    }
+
+    function downloadZReportDOCX() {
+      if (!currentZReportData) return;
+      const r = currentZReportData;
+      const wordHtml = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset='utf-8'><title>Z-Report ${r.date}</title>
+        <style>body{font-family:Calibri,Arial;margin:20px;} .head{color:#006d30;font-weight:bold;font-size:18pt;text-align:center;} table{width:100%;border-collapse:collapse;margin:15px 0;} td,th{padding:6px;border:1px solid #ccc;font-size:11pt;}</style>
+        </head><body>
+        <div class='head'>GROCERYPRO REGISTER Z-REPORT</div>
+        <p align='center'>Date: ${r.date} | Register: ${r.lane} | Generated: ${r.generated_at}</p>
+        <table>
+          <tr><th>Metric</th><th>Amount</th></tr>
+          <tr><td>Total Transactions</td><td>${r.transaction_count}</td></tr>
+          <tr><td>Total Items Sold</td><td>${r.total_items_sold}</td></tr>
+          <tr><td>Net Sales</td><td>₹${r.net_sales.toFixed(2)}</td></tr>
+          <tr><td>Tax (8.25%)</td><td>₹${r.tax_collected.toFixed(2)}</td></tr>
+          <tr style='font-weight:bold;background:#e8f5ec;'><td>GROSS REVENUE</td><td>₹${r.gross_total.toFixed(2)}</td></tr>
+          <tr><td>Cash in Drawer</td><td>₹${(r.payment_breakdown.Cash || 0).toFixed(2)}</td></tr>
+          <tr><td>UPI / QR Payments</td><td>₹${(r.payment_breakdown.UPI || 0).toFixed(2)}</td></tr>
+          <tr><td>Card Terminal Payments</td><td>₹${(r.payment_breakdown.Card || 0).toFixed(2)}</td></tr>
+        </table>
+        </body></html>
+      `;
+      const blob = new Blob(['\ufeff', wordHtml], { type: 'application/msword;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GroceryPro_ZReport_${r.date}.doc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Z-Report downloaded (.doc)!', 'success');
     }
 
     function closeReceipt() {

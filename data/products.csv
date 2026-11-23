@@ -1,5 +1,5 @@
 name,price,stock,category
-rice,50.0,7,Staples
+rice,50.0,4,Staples
 wheat,40.0,10,Staples
 flour,30.0,9,Staples
 oil,100.0,4,Oils
@@ -19,10 +19,10 @@ chilli_powder,25.0,15,Spices
 coriander,20.0,15,Spices
 cumin,35.0,12,Spices
 garam_masala,50.0,10,Spices
-biscuits,40.0,20,Snacks
+biscuits,40.0,19,Snacks
 chips,30.0,18,Snacks
 noodles,15.0,25,Snacks
-pasta,60.0,12,Staples
+pasta,60.0,11,Staples
 moong_daal,70.0,10,Pulses
 chana,55.0,10,Pulses
 rajma,80.0,8,Pulses
