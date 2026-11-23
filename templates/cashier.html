@@ -1251,7 +1251,7 @@
           </div>
 
           <div class="change-box" id="change-box" style="display:none;">
-            <span>Change Due to Customer:</span>
+            <span id="change-box-label">Change Due to Customer:</span>
             <strong id="change-due">₹0.00</strong>
           </div>
         </div>
@@ -1270,9 +1270,9 @@
             <div style="font-size:13px;font-weight:800;color:#006d30;margin-top:2px;">
               Amount: <span id="upi-qr-amt">₹0.00</span>
             </div>
-            <div class="upi-pulse-badge" style="margin-top:6px;">
-              <span class="material-icons" style="font-size:13px;">hourglass_top</span>
-              Waiting for Customer Scan
+            <div class="upi-pulse-badge" id="upi-scan-status-badge" style="margin-top:6px;cursor:pointer;" onclick="simulateUpiScan()" title="Click to simulate customer payment scan">
+              <span class="material-icons" id="upi-scan-status-icon" style="font-size:13px;">hourglass_top</span>
+              <span id="upi-scan-status-text">Waiting for Customer Scan (Click to simulate)</span>
             </div>
           </div>
         </div>
@@ -1835,28 +1835,71 @@
       }
     }
 
+    let currentCardAuthCode = 'AUTH-88219';
+
     function updateUpiQr() {
       const qrAmt = document.getElementById('upi-qr-amt');
       const qrImg = document.getElementById('upi-qr-image');
+      const badge = document.getElementById('upi-scan-status-badge');
+      const icon = document.getElementById('upi-scan-status-icon');
+      const text = document.getElementById('upi-scan-status-text');
+
+      if (badge && text) {
+        badge.style.background = '#e0f2fe';
+        badge.style.color = '#0284c7';
+        badge.style.animation = 'pulse 1.8s infinite';
+        if (icon) icon.textContent = 'hourglass_top';
+        text.textContent = 'Waiting for Customer Scan (Click to simulate)';
+      }
+
       if (qrAmt) qrAmt.textContent = '₹' + currentGrandTotal.toFixed(2);
       if (qrImg) {
         if (currentGrandTotal > 0) {
-          const upiUri = `upi://pay?pa=grocerypro@upi&pn=GroceryPro%20Retail&am=${currentGrandTotal.toFixed(2)}&cu=INR&tn=Lane04`;
+          const upiUri = `upi://pay?pa=grocerypro@upi&pn=GroceryPro&am=${currentGrandTotal.toFixed(2)}&cu=INR`;
           qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiUri)}`;
         } else {
-          qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=upi%3A%2F%2Fpay%3Fpa%3Dgrocerypro%40upi%26pn%3DGroceryPro`;
+          qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=upi%3A%2F%2Fpay%3Fpa%3Dgrocerypro%40upi%26pn%3DGroceryPro%26cu%3DINR`;
         }
+      }
+    }
+
+    function simulateUpiScan() {
+      const badge = document.getElementById('upi-scan-status-badge');
+      const icon = document.getElementById('upi-scan-status-icon');
+      const text = document.getElementById('upi-scan-status-text');
+      if (badge && text) {
+        badge.style.background = '#dcfce7';
+        badge.style.color = '#15803d';
+        badge.style.animation = 'none';
+        if (icon) icon.textContent = 'check_circle';
+        text.textContent = '✓ Customer Scan Confirmed & Verified!';
+        playBeep(true);
+        showToast('UPI customer payment scanned & verified!', 'success');
       }
     }
 
     function updateCardPos() {
       const cardAmt = document.getElementById('card-pos-amt');
       if (cardAmt) cardAmt.textContent = '₹' + currentGrandTotal.toFixed(2);
+      const prompt = document.getElementById('card-pos-prompt');
+      if (prompt) prompt.textContent = 'TAP, INSERT, OR SWIPE CARD';
+      const status = document.getElementById('card-pos-status');
+      if (status) { status.textContent = 'READY'; status.style.color = '#4ade80'; }
     }
 
     function simulateCardTap() {
+      const last4 = document.getElementById('card-last4').value || '4242';
+      const auth = 'AUTH-' + Math.floor(100000 + Math.random() * 900000);
+      currentCardAuthCode = auth;
       playBeep(true);
-      showToast('Card contactless tap authorized! (Ref #AUTH-88219)', 'success');
+
+      const prompt = document.getElementById('card-pos-prompt');
+      const status = document.getElementById('card-pos-status');
+      if (status) { status.textContent = 'APPROVED'; status.style.color = '#4ade80'; }
+      if (prompt) {
+        prompt.innerHTML = `<span style="color:#4ade80;font-weight:bold;">APPROVED: #${auth}</span> · •••• ${last4}`;
+      }
+      showToast(`Card contactless tap authorized! (Ref #${auth})`, 'success');
     }
 
     // Tender & Change Due
@@ -1874,11 +1917,29 @@
       const val = parseFloat(document.getElementById('tender-amt').value) || 0;
       const box = document.getElementById('change-box');
       const dueEl = document.getElementById('change-due');
+      const labelEl = document.getElementById('change-box-label');
+
+      if (val <= 0) {
+        box.style.display = 'none';
+        return;
+      }
 
       if (val >= currentGrandTotal && currentGrandTotal > 0) {
         const change = val - currentGrandTotal;
-        dueEl.textContent = '₹' + change.toFixed(2);
         box.style.display = 'flex';
+        box.style.background = '#e8f5ec';
+        box.style.color = '#006d30';
+        box.style.border = '1.5px solid #a7f3d0';
+        if (labelEl) labelEl.textContent = 'Change Due to Customer:';
+        dueEl.textContent = '₹' + change.toFixed(2);
+      } else if (val < currentGrandTotal && currentGrandTotal > 0) {
+        const needed = currentGrandTotal - val;
+        box.style.display = 'flex';
+        box.style.background = '#fef2f2';
+        box.style.color = '#dc2626';
+        box.style.border = '1.5px solid #fecaca';
+        if (labelEl) labelEl.textContent = '⚠️ Short Cash (Needs more):';
+        dueEl.textContent = '₹' + needed.toFixed(2);
       } else {
         box.style.display = 'none';
       }
@@ -1948,6 +2009,8 @@
         paymentMethod,
         tenderAmount,
         changeDue,
+        cardAuth: currentCardAuthCode || 'AUTH-88219',
+        cardLast4: (document.getElementById('card-last4') ? document.getElementById('card-last4').value : '4242') || '4242',
         storeName: 'GroceryPro Store',
         storeBranch: 'Downtown Flagship · Lane 04',
         lane: 'Lane 04 (Cashier Terminal)',
@@ -2030,7 +2093,7 @@
           ${d.paymentMethod === 'Card' ? `
             <div class="receipt-summary-row" style="font-size:10.5px;color:#4f46e5;">
               <span>Card:</span>
-              <span>•••• •••• •••• 4242 (Auth #88219)</span>
+              <span>•••• •••• •••• ${d.cardLast4 || '4242'} (${d.cardAuth || 'AUTH-88219'})</span>
             </div>
           ` : ''}
         </div>

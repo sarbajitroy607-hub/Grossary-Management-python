@@ -153,13 +153,21 @@ def api_checkout():
         price = prod["price"] if prod else 0
         total = price * qty
         receipt.append({"name": name, "qty": qty, "price": price, "total": total})
-        # Persist each sale line to the database
-        record_sale(sid, name, qty, price, payment_method=payment_method)
 
     grand_total = sum(i["total"] for i in receipt)
     tax = round(grand_total * 0.0825, 2)
     final_due = round(grand_total + tax, 2)
-    change_due = max(0.0, round(tender_amount - final_due, 2)) if payment_method == "Cash" and tender_amount >= final_due else 0.0
+    actual_tender = tender_amount if (payment_method == "Cash" and tender_amount > 0) else final_due
+    change_due = max(0.0, round(actual_tender - final_due, 2)) if payment_method == "Cash" else 0.0
+
+    # Persist each sale line to the database
+    for item in receipt:
+        record_sale(
+            sid, item["name"], item["qty"], item["price"],
+            payment_method=payment_method,
+            tender_amount=actual_tender,
+            change_due=change_due
+        )
 
     cart.clear()
     return jsonify({

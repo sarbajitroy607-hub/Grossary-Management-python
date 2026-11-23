@@ -17,7 +17,7 @@ PRODUCTS_CSV  = os.path.join(DATA_DIR, "products.csv")
 SALES_CSV     = os.path.join(DATA_DIR, "sales.csv")
 
 PRODUCTS_FIELDS = ["name", "price", "stock", "category"]
-SALES_FIELDS    = ["session_id", "item_name", "qty", "unit_price", "total", "sold_at", "payment_method"]
+SALES_FIELDS    = ["session_id", "item_name", "qty", "unit_price", "total", "sold_at", "payment_method", "tender_amount", "change_due"]
 
 # Default stock loaded when products.csv doesn't exist yet
 DEFAULT_PRODUCTS = [
@@ -47,11 +47,11 @@ def init_db():
             writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
             writer.writeheader()
     else:
-        # Check if header needs migration to include payment_method
+        # Check if header needs migration to include payment_method, tender_amount, change_due
         try:
             with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
                 first_line = f.readline().strip()
-            if "payment_method" not in first_line:
+            if "tender_amount" not in first_line or "payment_method" not in first_line:
                 with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
                     reader = list(csv.DictReader(f))
                 with open(SALES_CSV, "w", newline="", encoding="utf-8") as f:
@@ -60,7 +60,11 @@ def init_db():
                     for r in reader:
                         if "payment_method" not in r or not r["payment_method"]:
                             r["payment_method"] = "Cash"
-                        writer.writerow(r)
+                        if "tender_amount" not in r:
+                            r["tender_amount"] = r.get("total", 0.0)
+                        if "change_due" not in r:
+                            r["change_due"] = 0.0
+                        writer.writerow({k: r.get(k, "") for k in SALES_FIELDS})
         except Exception:
             pass
 
@@ -135,8 +139,8 @@ def add_product(name, price, qty, category="General"):
 
 # ── Sales API ─────────────────────────────────────────────────────────
 
-def record_sale(session_id, item_name, qty, unit_price, payment_method="Cash"):
-    """Append one sale line to sales.csv."""
+def record_sale(session_id, item_name, qty, unit_price, payment_method="Cash", tender_amount=0.0, change_due=0.0):
+    """Append one sale line to sales.csv with tender reconciliation."""
     with open(SALES_CSV, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
         writer.writerow({
@@ -147,6 +151,8 @@ def record_sale(session_id, item_name, qty, unit_price, payment_method="Cash"):
             "total":          round(qty * unit_price, 2),
             "sold_at":        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "payment_method": payment_method or "Cash",
+            "tender_amount":  round(float(tender_amount or 0.0), 2),
+            "change_due":     round(float(change_due or 0.0), 2),
         })
 
 
