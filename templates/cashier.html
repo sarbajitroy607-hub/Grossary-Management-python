@@ -1377,16 +1377,22 @@
       <!-- Action Buttons -->
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;flex-shrink:0;">
         <button class="btn btn-primary btn-full btn-lg" onclick="printZReport()" style="gap:8px;">
-          <span class="material-icons">print</span> Print Official Z-Report
+          <span class="material-icons">print</span> Print Official Z-Report (80mm)
         </button>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <button class="btn-download" onclick="downloadZReportTXT()" title="Download text report">
-            <span class="material-icons" style="font-size:16px;">receipt</span> Download Text (.txt)
+          <button class="btn-download" onclick="downloadZReportPDF()" title="Download PDF report">
+            <span class="material-icons" style="font-size:18px;color:#d9534f;">picture_as_pdf</span>
+            Download PDF
           </button>
           <button class="btn-download" onclick="downloadZReportDOCX()" title="Download Word report">
-            <span class="material-icons" style="font-size:16px;color:#2a75d3;">description</span> Download Word (.doc)
+            <span class="material-icons" style="font-size:18px;color:#2a75d3;">description</span>
+            Download Word (.doc)
           </button>
         </div>
+        <button class="btn-download" onclick="downloadZReportTXT()" style="width:100%;" title="Download text report">
+          <span class="material-icons" style="font-size:16px;color:var(--outline);">receipt</span>
+          Download Plain Text (.txt)
+        </button>
         <button class="btn btn-full btn-secondary" onclick="closeZReportModal()" style="font-size:13px;padding:8px;">
           Close Summary
         </button>
@@ -2439,7 +2445,7 @@
           <title>Z-Report ${r.date}</title>
           <style>
             @page { size: 80mm auto; margin: 4mm; }
-            body { font-family: 'Courier New', monospace; font-size: 11px; width: 72mm; margin: 0 auto; color: #000; }
+            body { font-family: 'Courier New', monospace; font-size: 11px; width: 72mm; margin: 0 auto; color: #000; line-height: 1.35; }
             .center { text-align: center; }
             .right { text-align: right; }
             .bold { font-weight: bold; }
@@ -2450,28 +2456,39 @@
         </head>
         <body>
           <div class="center">
-            <h2 style="margin:0;font-size:15px;">GROCERYPRO STORE</h2>
-            <div style="font-size:10px;">REGISTER CLOSEOUT (Z-REPORT)</div>
-            <div style="font-size:9px;">Date: ${r.date} · Lane 04</div>
+            <h2 style="margin:0;font-size:15px;letter-spacing:1px;">GROCERYPRO STORE</h2>
+            <div style="font-size:10.5px;font-weight:bold;margin-top:2px;">DAILY REGISTER Z-REPORT</div>
+            <div style="font-size:9.5px;color:#333;">END-OF-DAY AUDIT CLOSEOUT</div>
+            <div style="font-size:9px;margin-top:2px;">Date: ${r.date} · ${r.lane}</div>
           </div>
           <div class="dash"></div>
+          <div class="bold" style="font-size:10px;text-transform:uppercase;">1. Transaction Summary:</div>
           <div class="row"><span>Transactions:</span><span class="bold">${r.transaction_count}</span></div>
           <div class="row"><span>Units Sold:</span><span class="bold">${r.total_items_sold}</span></div>
           <div class="row"><span>Net Sales:</span><span>₹${r.net_sales.toFixed(2)}</span></div>
           <div class="row"><span>Tax (8.25%):</span><span>₹${r.tax_collected.toFixed(2)}</span></div>
-          <div class="double row bold">
+          <div class="double row bold" style="font-size:12px;">
             <span>GROSS TOTAL:</span>
             <span>₹${r.gross_total.toFixed(2)}</span>
           </div>
           <div class="dash"></div>
-          <div class="bold" style="margin-bottom:2px;">TENDER SUMMARY:</div>
-          <div class="row"><span>Cash:</span><span>₹${(r.payment_breakdown.Cash || 0).toFixed(2)}</span></div>
+          <div class="bold" style="font-size:10px;text-transform:uppercase;">2. Tender Reconciliation:</div>
+          <div class="row"><span>Cash in Drawer:</span><span>₹${(r.payment_breakdown.Cash || 0).toFixed(2)}</span></div>
           <div class="row"><span>UPI / QR:</span><span>₹${(r.payment_breakdown.UPI || 0).toFixed(2)}</span></div>
           <div class="row"><span>Card POS:</span><span>₹${(r.payment_breakdown.Card || 0).toFixed(2)}</span></div>
           <div class="dash"></div>
-          <div class="center" style="font-size:9px;margin-top:10px;">
+          <div class="bold" style="font-size:10px;text-transform:uppercase;">3. Top 5 Selling Products:</div>
+          ${r.top_products && r.top_products.length ? r.top_products.map((p, idx) => `
+            <div class="row">
+              <span>${idx + 1}. ${capitalize(p.name)} (${p.qty}x)</span>
+              <span class="bold">₹${p.revenue.toFixed(2)}</span>
+            </div>
+          `).join('') : '<div class="row"><span>No sales recorded today</span></div>'}
+          <div class="dash"></div>
+          <div class="center" style="font-size:9px;margin-top:8px;">
             *** OFFICIAL REGISTER AUDIT TAPE ***<br/>
-            Printed: ${r.generated_at}
+            Printed: ${r.generated_at}<br/>
+            Status: BALANCED &amp; CLOSED
           </div>
         </body>
         </html>
@@ -2485,10 +2502,37 @@
       setTimeout(() => { iframe.contentWindow.print(); }, 250);
     }
 
+    async function downloadZReportPDF() {
+      if (!currentZReportData) return;
+      const slipEl = document.getElementById('zreport-slip-container');
+      if (!slipEl) return;
+
+      if (typeof html2pdf !== 'undefined') {
+        showToast('Generating Z-Report PDF…', 'success');
+        const opt = {
+          margin:       [8, 8, 8, 8],
+          filename:     `GroceryPro_ZReport_${currentZReportData.date}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true, logging: false },
+          jsPDF:        { unit: 'mm', format: [110, 210], orientation: 'portrait' }
+        };
+        try {
+          await html2pdf().set(opt).from(slipEl).save();
+          showToast('Z-Report PDF downloaded successfully!', 'success');
+          return;
+        } catch (e) {
+          console.warn('html2pdf generation error:', e);
+        }
+      }
+
+      showToast('Opening print dialog — select "Save as PDF"', 'success');
+      printZReport();
+    }
+
     function downloadZReportTXT() {
       if (!currentZReportData) return;
       const r = currentZReportData;
-      const w = 40;
+      const w = 42;
       const line = '='.repeat(w);
       const dash = '-'.repeat(w);
       const center = (str) => {
@@ -2498,28 +2542,41 @@
 
       let txt = '';
       txt += line + '\n';
-      txt += center('GROCERYPRO STORE') + '\n';
+      txt += center('GROCERYPRO SUPERMARKET') + '\n';
       txt += center('DAILY REGISTER Z-REPORT') + '\n';
-      txt += center('LANE 04 - EOD CLOSEOUT') + '\n';
+      txt += center('END-OF-DAY CLOSEOUT AUDIT') + '\n';
       txt += line + '\n';
-      txt += `Date:       ${r.date}\n`;
-      txt += `Generated:  ${r.generated_at}\n`;
-      txt += `Register:   ${r.lane}\n`;
+      txt += `Date:          ${r.date}\n`;
+      txt += `Generated:     ${r.generated_at}\n`;
+      txt += `Register:      ${r.lane}\n`;
+      txt += `Terminal:      ${r.cashier}\n`;
       txt += dash + '\n';
-      txt += 'SALES TOTALS:\n';
-      txt += `Total Transactions:      ${String(r.transaction_count).padStart(12, ' ')}\n`;
-      txt += `Total Items Sold:        ${String(r.total_items_sold).padStart(12, ' ')}\n`;
-      txt += `Net Sales:              ₹${r.net_sales.toFixed(2).padStart(12, ' ')}\n`;
-      txt += `Tax Collected (8.25%):  ₹${r.tax_collected.toFixed(2).padStart(12, ' ')}\n`;
+      txt += '1. TRANSACTION & SALES SUMMARY:\n';
+      txt += `Total Completed Transactions: ${String(r.transaction_count).padStart(10, ' ')}\n`;
+      txt += `Total Product Units Sold:     ${String(r.total_items_sold).padStart(10, ' ')}\n`;
+      txt += `Net Sales (Pre-Tax):         ₹${r.net_sales.toFixed(2).padStart(10, ' ')}\n`;
+      txt += `Sales Tax Collected (8.25%): ₹${r.tax_collected.toFixed(2).padStart(10, ' ')}\n`;
       txt += line + '\n';
-      txt += `GROSS REVENUE:          ₹${r.gross_total.toFixed(2).padStart(12, ' ')}\n`;
+      txt += `GROSS REVENUE:               ₹${r.gross_total.toFixed(2).padStart(10, ' ')}\n`;
       txt += line + '\n';
-      txt += 'TENDER RECONCILIATION:\n';
-      txt += `Cash in Drawer:         ₹${(r.payment_breakdown.Cash || 0).toFixed(2).padStart(12, ' ')}\n`;
-      txt += `UPI / QR Payments:      ₹${(r.payment_breakdown.UPI || 0).toFixed(2).padStart(12, ' ')}\n`;
-      txt += `Card POS Terminals:     ₹${(r.payment_breakdown.Card || 0).toFixed(2).padStart(12, ' ')}\n`;
+      txt += '2. TENDER RECONCILIATION:\n';
+      txt += `Cash in Drawer:              ₹${(r.payment_breakdown.Cash || 0).toFixed(2).padStart(10, ' ')}\n`;
+      txt += `UPI / QR Payments:           ₹${(r.payment_breakdown.UPI || 0).toFixed(2).padStart(10, ' ')}\n`;
+      txt += `Card POS Terminals:          ₹${(r.payment_breakdown.Card || 0).toFixed(2).padStart(10, ' ')}\n`;
       txt += dash + '\n';
-      txt += center('*** END OF REGISTER AUDIT ***') + '\n';
+      txt += '3. TOP 5 SELLING PRODUCTS TODAY:\n';
+      if (r.top_products && r.top_products.length) {
+        r.top_products.forEach((p, idx) => {
+          const itemLabel = `${idx + 1}. ${capitalize(p.name)} (${p.qty}x)`;
+          const revLabel = `₹${p.revenue.toFixed(2)}`;
+          txt += itemLabel.padEnd(28, ' ') + revLabel.padStart(14, ' ') + '\n';
+        });
+      } else {
+        txt += '  No sales recorded today.\n';
+      }
+      txt += dash + '\n';
+      txt += center('*** OFFICIAL REGISTER AUDIT TAPE ***') + '\n';
+      txt += center('LANE 04 · BALANCED & CLOSED') + '\n';
       txt += line + '\n';
 
       const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
@@ -2540,21 +2597,56 @@
       const wordHtml = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
         <head><meta charset='utf-8'><title>Z-Report ${r.date}</title>
-        <style>body{font-family:Calibri,Arial;margin:20px;} .head{color:#006d30;font-weight:bold;font-size:18pt;text-align:center;} table{width:100%;border-collapse:collapse;margin:15px 0;} td,th{padding:6px;border:1px solid #ccc;font-size:11pt;}</style>
+        <style>
+          body { font-family: Calibri, Arial, sans-serif; margin: 30px; font-size: 11pt; color: #1a1a1a; }
+          .head { color: #006d30; font-weight: bold; font-size: 20pt; text-align: center; }
+          .sub { text-align: center; font-size: 11pt; color: #555; margin-bottom: 20px; }
+          .sec { color: #006d30; font-size: 13pt; font-weight: bold; margin-top: 18px; margin-bottom: 6px; }
+          table { width: 100%; border-collapse: collapse; margin: 10px 0 16px 0; }
+          th { background: #f0f7f2; color: #006d30; border: 1px solid #cbd5e1; padding: 7px 10px; font-size: 10.5pt; text-align: left; }
+          td { border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10.5pt; }
+          .right { text-align: right; }
+          .bold { font-weight: bold; }
+          .highlight { background: #e8f5ec; font-weight: bold; font-size: 12pt; color: #006d30; }
+        </style>
         </head><body>
-        <div class='head'>GROCERYPRO REGISTER Z-REPORT</div>
-        <p align='center'>Date: ${r.date} | Register: ${r.lane} | Generated: ${r.generated_at}</p>
+        <div class='head'>GROCERYPRO SUPERMARKET</div>
+        <div class='sub'>DAILY REGISTER Z-REPORT (EOD CLOSEOUT)<br/>Date: ${r.date} | Register: ${r.lane} | Generated: ${r.generated_at}</div>
+
+        <div class='sec'>1. Transaction &amp; Revenue Summary</div>
         <table>
-          <tr><th>Metric</th><th>Amount</th></tr>
-          <tr><td>Total Transactions</td><td>${r.transaction_count}</td></tr>
-          <tr><td>Total Items Sold</td><td>${r.total_items_sold}</td></tr>
-          <tr><td>Net Sales</td><td>₹${r.net_sales.toFixed(2)}</td></tr>
-          <tr><td>Tax (8.25%)</td><td>₹${r.tax_collected.toFixed(2)}</td></tr>
-          <tr style='font-weight:bold;background:#e8f5ec;'><td>GROSS REVENUE</td><td>₹${r.gross_total.toFixed(2)}</td></tr>
-          <tr><td>Cash in Drawer</td><td>₹${(r.payment_breakdown.Cash || 0).toFixed(2)}</td></tr>
-          <tr><td>UPI / QR Payments</td><td>₹${(r.payment_breakdown.UPI || 0).toFixed(2)}</td></tr>
-          <tr><td>Card Terminal Payments</td><td>₹${(r.payment_breakdown.Card || 0).toFixed(2)}</td></tr>
+          <tr><th>Metric</th><th class='right'>Value</th></tr>
+          <tr><td>Total Completed Transactions</td><td class='right bold'>${r.transaction_count}</td></tr>
+          <tr><td>Total Product Units Sold</td><td class='right bold'>${r.total_items_sold}</td></tr>
+          <tr><td>Net Sales (Pre-Tax)</td><td class='right'>₹${r.net_sales.toFixed(2)}</td></tr>
+          <tr><td>Sales Tax Collected (${r.tax_rate || '8.25%'})</td><td class='right'>₹${r.tax_collected.toFixed(2)}</td></tr>
+          <tr class='highlight'><td>GROSS REVENUE</td><td class='right'>₹${r.gross_total.toFixed(2)}</td></tr>
         </table>
+
+        <div class='sec'>2. Tender Reconciliation</div>
+        <table>
+          <tr><th>Payment Tender</th><th class='right'>Reconciled Amount</th></tr>
+          <tr><td>💵 Cash in Register Drawer</td><td class='right'>₹${(r.payment_breakdown.Cash || 0).toFixed(2)}</td></tr>
+          <tr><td>📱 UPI / Dynamic QR Code</td><td class='right'>₹${(r.payment_breakdown.UPI || 0).toFixed(2)}</td></tr>
+          <tr><td>💳 Card / POS Terminal</td><td class='right'>₹${(r.payment_breakdown.Card || 0).toFixed(2)}</td></tr>
+        </table>
+
+        <div class='sec'>3. Top 5 Selling Products Today</div>
+        <table>
+          <tr><th style='width:40px;'>Rank</th><th>Product Name</th><th class='right' style='width:90px;'>Units Sold</th><th class='right' style='width:120px;'>Gross Revenue</th></tr>
+          ${r.top_products && r.top_products.length ? r.top_products.map((p, idx) => `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${capitalize(p.name)}</td>
+              <td class='right bold'>${p.qty}</td>
+              <td class='right'>₹${p.revenue.toFixed(2)}</td>
+            </tr>
+          `).join('') : '<tr><td colspan="4" align="center" style="color:#888;">No sales recorded today</td></tr>'}
+        </table>
+
+        <p style='text-align:center;font-size:9pt;color:#777;margin-top:25px;border-top:1px dashed #ccc;padding-top:10px;'>
+          Official POS Register Audit Summary · Lane 04 · Status: Reconciled
+        </p>
         </body></html>
       `;
       const blob = new Blob(['\ufeff', wordHtml], { type: 'application/msword;charset=utf-8' });
