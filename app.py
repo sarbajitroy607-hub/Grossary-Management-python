@@ -34,6 +34,10 @@ def index():
 def user_page():
     return render_template("user.html")
 
+@app.route("/cashier")
+def cashier_page():
+    return render_template("cashier.html")
+
 @app.route("/admin")
 def admin_page():
     return render_template("admin.html")
@@ -43,7 +47,17 @@ def admin_page():
 @app.route("/api/items")
 def api_items():
     products = get_all_products()
-    items = [{"name": p["name"], "price": p["price"], "stock": p["stock"]} for p in products]
+    items = []
+    for i, p in enumerate(products, 1):
+        name = p["name"]
+        items.append({
+            "name": name,
+            "price": p["price"],
+            "stock": p["stock"],
+            "category": p.get("category", "General"),
+            "sku": f"GP-{name[:3].upper()}",
+            "barcode": f"890{i:05d}"
+        })
     return jsonify(items)
 
 
@@ -138,19 +152,30 @@ def api_checkout():
     return jsonify({"success": True, "receipt": receipt, "grand_total": grand_total})
 
 
-# ── Admin API ────────────────────────────────────────────────────────
+# ── Auth API ─────────────────────────────────────────────────────────
 @app.route("/api/admin/login", methods=["POST"])
 def api_admin_login():
-    data = request.json
-    if data.get("email") == "admin@gmail.com" and data.get("password") == "123456":
+    data = request.json or {}
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", "")).strip()
+
+    if email == "admin@gmail.com" and password == "123456":
         session["admin"] = True
-        return jsonify({"success": True})
-    return jsonify({"success": False, "message": "Invalid credentials."}), 401
+        session["role"] = "admin"
+        return jsonify({"success": True, "role": "admin"})
+    elif email in ["cashier@store.io", "cashier", "cashier@gmail.com"] and password in ["123456", "1234"]:
+        session["cashier"] = True
+        session["role"] = "cashier"
+        return jsonify({"success": True, "role": "cashier"})
+
+    return jsonify({"success": False, "message": "Invalid credentials. For Admin use admin@gmail.com / 123456; For Cashier use cashier@store.io / 123456"}), 401
 
 
 @app.route("/api/admin/logout", methods=["POST"])
 def api_admin_logout():
     session.pop("admin", None)
+    session.pop("cashier", None)
+    session.pop("role", None)
     return jsonify({"success": True})
 
 

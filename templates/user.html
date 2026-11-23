@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     .user-layout {
       display: flex; height: 100vh; padding-top: var(--header-height);
@@ -132,14 +133,148 @@
       border-top: 1px solid rgba(186,26,26,0.15);
       margin-top: auto;
     }
-    /* Receipt modal */
-    .receipt-body { display:flex;flex-direction:column;gap:10px; }
-    .receipt-row { display:flex;align-items:center;justify-content:space-between; }
-    .receipt-row .r-name { font-size:13px;color:var(--on-surface);font-weight:600; }
-    .receipt-row .r-detail { font-size:11px;color:var(--outline); }
-    .receipt-row .r-total { font-size:14px;font-weight:700;color:var(--on-surface); }
-    .receipt-grand { font-size:26px;font-weight:800;color:var(--primary);letter-spacing:-.02em; }
-    .receipt-divider { height:1px;background:var(--surface-high); }
+    /* Receipt Slip & Modal Styling */
+    .receipt-slip {
+      background: #ffffff;
+      border: 1px dashed #d0d7de;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      color: #24292f;
+      font-family: inherit;
+    }
+    .receipt-slip-header {
+      text-align: center;
+      border-bottom: 1px dashed #e1e4e8;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+    }
+    .receipt-slip-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #0b1c30;
+      letter-spacing: -0.01em;
+    }
+    .receipt-slip-meta {
+      font-size: 11px;
+      color: #57606a;
+      margin-top: 3px;
+      line-height: 1.4;
+    }
+    .receipt-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 12px;
+    }
+    .receipt-table th {
+      text-align: left;
+      font-weight: 700;
+      color: #57606a;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 5px 0;
+      border-bottom: 1px solid #e1e4e8;
+    }
+    .receipt-table th.r-right, .receipt-table td.r-right {
+      text-align: right;
+    }
+    .receipt-table td {
+      padding: 6px 0;
+      color: #24292f;
+      vertical-align: top;
+      border-bottom: 1px solid #f6f8fa;
+    }
+    .receipt-table td .item-bold {
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .receipt-table td .item-sub {
+      font-size: 10.5px;
+      color: #57606a;
+    }
+    .receipt-summary {
+      border-top: 1px dashed #e1e4e8;
+      padding-top: 8px;
+      margin-top: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .receipt-summary-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #57606a;
+    }
+    .receipt-grand-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 1px solid #0b1c30;
+    }
+    .receipt-grand-label {
+      font-size: 13px;
+      font-weight: 800;
+      color: #0b1c30;
+      text-transform: uppercase;
+    }
+    .receipt-grand-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.02em;
+    }
+    .receipt-slip-footer {
+      text-align: center;
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px dashed #e1e4e8;
+      font-size: 10.5px;
+      color: #57606a;
+    }
+    .receipt-barcode {
+      font-family: monospace;
+      letter-spacing: 3px;
+      font-size: 13px;
+      font-weight: bold;
+      color: #24292f;
+      margin: 6px 0 2px 0;
+    }
+    .receipt-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .download-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .btn-download {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 9px 12px;
+      border-radius: var(--radius-md);
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid var(--surface-highest);
+      background: var(--surface-low);
+      color: var(--on-surface);
+      transition: all .15s;
+    }
+    .btn-download:hover {
+      background: var(--surface-container);
+      border-color: var(--outline-variant);
+      transform: translateY(-1px);
+    }
     @media (max-width:1100px) {
       .category-mosaics { grid-template-columns:repeat(2,1fr); }
     }
@@ -366,18 +501,46 @@
 
   <!-- Receipt Modal -->
   <div class="modal-overlay" id="receipt-modal">
-    <div class="modal" style="max-width:420px;">
+    <div class="modal" style="max-width:440px; max-height:92vh; display:flex; flex-direction:column; overflow:hidden;">
       <button class="modal-close" onclick="closeReceipt()"><span class="material-icons" style="font-size:18px;">close</span></button>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-        <div style="width:40px;height:40px;border-radius:10px;background:rgba(149,248,167,.35);display:flex;align-items:center;justify-content:center;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-shrink:0;">
+        <div style="width:38px;height:38px;border-radius:10px;background:rgba(149,248,167,.35);display:flex;align-items:center;justify-content:center;">
           <span class="material-icons" style="color:var(--primary);font-size:22px;">check_circle</span>
         </div>
         <div>
-          <div class="modal-title" style="margin-bottom:0;font-size:18px;">Purchase Complete!</div>
-          <div style="font-size:12px;color:var(--outline);">Thanks for shopping at GroceryPro</div>
+          <div class="modal-title" style="margin-bottom:0;font-size:17px;">Purchase Complete!</div>
+          <div style="font-size:11px;color:var(--outline);">Thanks for shopping at GroceryPro</div>
         </div>
       </div>
-      <div class="receipt-body" id="receipt-body"></div>
+      
+      <!-- Scrollable Receipt Slip -->
+      <div style="flex:1; overflow-y:auto; padding-right:2px;">
+        <div id="receipt-slip-container" class="receipt-slip"></div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="receipt-actions">
+        <button class="btn btn-primary btn-full btn-lg" onclick="printReceipt()" style="gap:8px;">
+          <span class="material-icons">print</span> Print Receipt
+        </button>
+        <div class="download-grid">
+          <button class="btn-download" onclick="downloadReceiptPDF()" title="Download PDF file">
+            <span class="material-icons" style="font-size:18px;color:#d9534f;">picture_as_pdf</span>
+            Download PDF
+          </button>
+          <button class="btn-download" onclick="downloadReceiptDOCX()" title="Download Word (.docx) file">
+            <span class="material-icons" style="font-size:18px;color:#2a75d3;">description</span>
+            Download Word (.docx)
+          </button>
+        </div>
+        <button class="btn-download" onclick="downloadReceiptTXT()" style="width:100%;" title="Download text slip">
+          <span class="material-icons" style="font-size:16px;color:var(--outline);">receipt</span>
+          Download Plain Text (.txt)
+        </button>
+        <button class="btn btn-full" onclick="closeReceipt()" style="background:transparent;border:none;color:var(--outline);font-size:12px;font-weight:600;padding:6px;cursor:pointer;">
+          Close Window
+        </button>
+      </div>
     </div>
   </div>
 
@@ -591,27 +754,424 @@
       }
     }
 
+    let currentReceiptData = null;
+
     function showReceipt(items, subtotal, tax, grand) {
-      const body = document.getElementById('receipt-body');
-      body.innerHTML = `
-        ${items.map(i=>`
-          <div class="receipt-row">
-            <div><div class="r-name">${capitalize(i.name)}</div><div class="r-detail">${i.qty}x @ ₹${i.price.toFixed(2)}</div></div>
-            <div class="r-total">₹${i.total.toFixed(2)}</div>
-          </div>`).join('')}
-        <div class="receipt-divider"></div>
-        <div class="receipt-row"><span style="font-size:12px;color:var(--outline);">Subtotal</span><span style="font-size:13px;font-weight:700;">₹${subtotal.toFixed(2)}</span></div>
-        <div class="receipt-row"><span style="font-size:12px;color:var(--outline);">Tax (8.25%)</span><span style="font-size:13px;font-weight:700;">₹${tax.toFixed(2)}</span></div>
-        <div class="receipt-divider"></div>
-        <div class="receipt-row">
-          <span style="font-size:14px;font-weight:700;">Final Balance Due</span>
-          <span class="receipt-grand">₹${grand.toFixed(2)}</span>
-        </div>
-        <button class="btn btn-primary btn-full btn-lg" style="margin-top:8px;" onclick="closeReceipt()">
-          <span class="material-icons">check_circle</span> Done — Print Receipt
-        </button>`;
+      const now = new Date();
+      const receiptId = 'GP-' + now.getFullYear() +
+        String(now.getMonth() + 1).padStart(2, '0') +
+        String(now.getDate()).padStart(2, '0') + '-' +
+        Math.floor(1000 + Math.random() * 9000);
+      
+      const dateStr = now.toLocaleDateString('en-IN', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+
+      currentReceiptData = {
+        receiptId,
+        dateStr,
+        items,
+        subtotal,
+        tax,
+        grand,
+        storeName: 'GroceryPro Store',
+        storeBranch: 'Downtown Flagship · Store #104',
+        lane: 'Lane 02 (Customer POS)',
+        cashier: 'Customer Self-Checkout'
+      };
+
+      renderReceiptSlip(currentReceiptData);
       document.getElementById('receipt-modal').classList.add('open');
     }
+
+    function renderReceiptSlip(d) {
+      const container = document.getElementById('receipt-slip-container');
+      if (!container) return;
+
+      container.innerHTML = `
+        <div class="receipt-slip-header">
+          <div class="receipt-slip-title">${d.storeName}</div>
+          <div class="receipt-slip-meta">${d.storeBranch}</div>
+          <div class="receipt-slip-meta">Tel: +91 1800-GROCERY · Tax Invoice</div>
+          <div style="font-size:10px;color:var(--outline);margin-top:4px;">
+            Receipt: <strong>${d.receiptId}</strong> · ${d.dateStr}
+          </div>
+        </div>
+
+        <table class="receipt-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th class="r-right" style="width:40px;">Qty</th>
+              <th class="r-right" style="width:70px;">Price</th>
+              <th class="r-right" style="width:75px;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.items.map(item => `
+              <tr>
+                <td>
+                  <div class="item-bold">${capitalize(item.name)}</div>
+                  <div class="item-sub">SKU: GP-${item.name.substring(0,3).toUpperCase()}</div>
+                </td>
+                <td class="r-right">${item.qty}</td>
+                <td class="r-right">₹${item.price.toFixed(2)}</td>
+                <td class="r-right">₹${item.total.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="receipt-summary">
+          <div class="receipt-summary-row">
+            <span>Subtotal</span>
+            <strong>₹${d.subtotal.toFixed(2)}</strong>
+          </div>
+          <div class="receipt-summary-row">
+            <span>Tax (8.25%)</span>
+            <strong>₹${d.tax.toFixed(2)}</strong>
+          </div>
+          <div class="receipt-grand-row">
+            <span class="receipt-grand-label">Final Balance Due</span>
+            <span class="receipt-grand-val">₹${d.grand.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <div class="receipt-slip-footer">
+          <div class="receipt-barcode">||||| | |||| ||| |||| | |||||</div>
+          <div>*${d.receiptId}*</div>
+          <div style="margin-top:6px;">Thank you for shopping at GroceryPro!</div>
+          <div style="font-size:9.5px;color:var(--outline);">Status: PAID IN FULL · Lane 02</div>
+        </div>
+      `;
+    }
+
+    function printReceipt() {
+      if (!currentReceiptData) return;
+
+      let iframe = document.getElementById('receipt-print-frame');
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'receipt-print-frame';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+      }
+
+      const printHtml = getReceiptPrintHtml(currentReceiptData);
+      const doc = iframe.contentWindow.document;
+      doc.open();
+      doc.write(printHtml);
+      doc.close();
+
+      iframe.contentWindow.focus();
+      setTimeout(() => {
+        iframe.contentWindow.print();
+      }, 300);
+    }
+
+    async function downloadReceiptPDF() {
+      if (!currentReceiptData) return;
+      const slipEl = document.getElementById('receipt-slip-container');
+      if (!slipEl) return;
+
+      if (typeof html2pdf !== 'undefined') {
+        showToast('Generating PDF receipt…', 'success');
+        const opt = {
+          margin:       [8, 8, 8, 8],
+          filename:     `GroceryPro_Receipt_${currentReceiptData.receiptId}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true, logging: false },
+          jsPDF:        { unit: 'mm', format: [100, 190], orientation: 'portrait' }
+        };
+        try {
+          await html2pdf().set(opt).from(slipEl).save();
+          showToast('PDF downloaded successfully!', 'success');
+          return;
+        } catch (e) {
+          console.warn('html2pdf generation error:', e);
+        }
+      }
+
+      // Fallback: prompt print dialog for "Save as PDF"
+      showToast('Opening print dialog — choose "Save as PDF"', 'success');
+      printReceipt();
+    }
+
+    function downloadReceiptDOCX() {
+      if (!currentReceiptData) return;
+      const d = currentReceiptData;
+
+      const wordHtml = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' 
+              xmlns:w='urn:schemas-microsoft-com:office:word' 
+              xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+          <meta charset='utf-8'>
+          <title>Receipt - ${d.receiptId}</title>
+          <!--[if gte mso 9]>
+          <xml>
+            <w:WordDocument>
+              <w:View>Print</w:View>
+              <w:Zoom>100</w:Zoom>
+              <w:DoNotOptimizeForBrowser/>
+            </w:WordDocument>
+          </xml>
+          <![endif]-->
+          <style>
+            body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 30px; }
+            .store-header { text-align: center; border-bottom: 2px solid #006d30; padding-bottom: 12px; margin-bottom: 15px; }
+            .store-name { font-size: 20pt; font-weight: bold; color: #006d30; margin: 0; }
+            .store-sub { font-size: 10pt; color: #555555; margin-top: 4px; }
+            .receipt-info { font-size: 10pt; margin-bottom: 15px; border-bottom: 1px dashed #cccccc; padding-bottom: 10px; }
+            .info-table { width: 100%; border: none; font-size: 10pt; }
+            .info-table td { padding: 3px 0; border: none; }
+            table.items { width: 100%; border-collapse: collapse; margin: 15px 0; }
+            table.items th { background-color: #f2f7f4; color: #006d30; border-bottom: 2px solid #006d30; padding: 8px 6px; text-align: left; font-size: 10pt; }
+            table.items th.right, table.items td.right { text-align: right; }
+            table.items td { padding: 8px 6px; border-bottom: 1px solid #e5e5e5; font-size: 10.5pt; }
+            table.totals { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            table.totals td { padding: 4px 6px; border: none; font-size: 10.5pt; }
+            .grand-total-row td { border-top: 2px solid #006d30; font-size: 13pt; font-weight: bold; color: #006d30; padding-top: 8px; }
+            .footer { text-align: center; font-size: 9.5pt; color: #666666; margin-top: 25px; border-top: 1px dashed #cccccc; padding-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="store-header">
+            <h1 class="store-name">GROCERYPRO STORE</h1>
+            <div class="store-sub">${d.storeBranch}</div>
+            <div class="store-sub">Official Tax Invoice & Sales Receipt</div>
+          </div>
+
+          <table class="info-table">
+            <tr>
+              <td><strong>Receipt Number:</strong> ${d.receiptId}</td>
+              <td align="right"><strong>Date / Time:</strong> ${d.dateStr}</td>
+            </tr>
+            <tr>
+              <td><strong>Terminal / Lane:</strong> ${d.lane}</td>
+              <td align="right"><strong>Payment Status:</strong> PAID (CASH/CARD)</td>
+            </tr>
+          </table>
+
+          <table class="items">
+            <thead>
+              <tr>
+                <th>Item Description</th>
+                <th class="right">Quantity</th>
+                <th class="right">Unit Price</th>
+                <th class="right">Total Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${d.items.map(item => `
+                <tr>
+                  <td><strong>${capitalize(item.name)}</strong></td>
+                  <td class="right">${item.qty}</td>
+                  <td class="right">₹${item.price.toFixed(2)}</td>
+                  <td class="right">₹${item.total.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <table class="totals">
+            <tr>
+              <td colspan="2" align="right" style="color:#555;">Subtotal:</td>
+              <td width="130" align="right"><strong>₹${d.subtotal.toFixed(2)}</strong></td>
+            </tr>
+            <tr>
+              <td colspan="2" align="right" style="color:#555;">Sales Tax (8.25%):</td>
+              <td align="right"><strong>₹${d.tax.toFixed(2)}</strong></td>
+            </tr>
+            <tr class="grand-total-row">
+              <td colspan="2" align="right">FINAL BALANCE DUE:</td>
+              <td align="right">₹${d.grand.toFixed(2)}</td>
+            </tr>
+          </table>
+
+          <div class="footer">
+            <p><strong>Thank you for choosing GroceryPro!</strong></p>
+            <p>Please retain this receipt for return or exchange within 14 days.</p>
+            <p style="font-size:8.5pt; color:#999;">Node Identity Validated · Encrypted POS Gateway</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob(['\ufeff', wordHtml], { type: 'application/msword;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GroceryPro_Receipt_${d.receiptId}.doc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Word receipt downloaded (.doc)!', 'success');
+    }
+
+    function downloadReceiptTXT() {
+      if (!currentReceiptData) return;
+      const d = currentReceiptData;
+
+      const w = 42;
+      const line = '='.repeat(w);
+      const dash = '-'.repeat(w);
+      const center = (str) => {
+        const pad = Math.max(0, Math.floor((w - str.length) / 2));
+        return ' '.repeat(pad) + str;
+      };
+
+      let txt = '';
+      txt += line + '\n';
+      txt += center('GROCERYPRO STORE') + '\n';
+      txt += center(d.storeBranch) + '\n';
+      txt += center('OFFICIAL SALES RECEIPT') + '\n';
+      txt += line + '\n';
+      txt += `Receipt #: ${d.receiptId}\n`;
+      txt += `Date:      ${d.dateStr}\n`;
+      txt += `Terminal:  ${d.lane}\n`;
+      txt += `Status:    PAID IN FULL\n`;
+      txt += dash + '\n';
+      txt += 'ITEM              QTY    PRICE      TOTAL\n';
+      txt += dash + '\n';
+
+      d.items.forEach(item => {
+        const name = capitalize(item.name).padEnd(16, ' ').substring(0, 16);
+        const qty = String(item.qty).padStart(4, ' ');
+        const price = ('₹' + item.price.toFixed(2)).padStart(9, ' ');
+        const total = ('₹' + item.total.toFixed(2)).padStart(10, ' ');
+        txt += `${name} ${qty} ${price} ${total}\n`;
+      });
+
+      txt += dash + '\n';
+      txt += 'Subtotal:'.padEnd(30, ' ') + ('₹' + d.subtotal.toFixed(2)).padStart(12, ' ') + '\n';
+      txt += 'Tax (8.25%):'.padEnd(30, ' ') + ('₹' + d.tax.toFixed(2)).padStart(12, ' ') + '\n';
+      txt += line + '\n';
+      txt += 'FINAL BALANCE DUE:'.padEnd(30, ' ') + ('₹' + d.grand.toFixed(2)).padStart(12, ' ') + '\n';
+      txt += line + '\n';
+      txt += 'Payment Method: CASH / CARD\n\n';
+      txt += center('THANK YOU FOR SHOPPING AT GROCERYPRO!') + '\n';
+      txt += center('Please come again') + '\n';
+      txt += line + '\n';
+
+      const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GroceryPro_Receipt_${d.receiptId}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Text receipt downloaded (.txt)!', 'success');
+    }
+
+    function getReceiptPrintHtml(d) {
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8"/>
+          <title>Receipt - ${d.receiptId}</title>
+          <style>
+            @page {
+              margin: 4mm;
+              size: 80mm auto;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Courier New", monospace;
+              width: 72mm;
+              margin: 0 auto;
+              padding: 4mm 0;
+              color: #000000;
+              font-size: 11px;
+              line-height: 1.35;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .store-name { font-size: 16px; font-weight: 800; letter-spacing: 0.5px; margin: 0; }
+            .store-sub { font-size: 10px; color: #444; margin: 2px 0; }
+            .divider-dashed { border-top: 1px dashed #000; margin: 8px 0; }
+            .divider-solid { border-top: 1px solid #000; margin: 8px 0; }
+            .meta-table { width: 100%; font-size: 10px; border-collapse: collapse; margin-bottom: 6px; }
+            .meta-table td { padding: 1px 0; }
+            .items-table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+            .items-table th { border-bottom: 1px solid #000; padding: 4px 0; font-size: 10px; text-transform: uppercase; }
+            .items-table td { padding: 4px 0; font-size: 11px; vertical-align: top; }
+            .totals-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+            .totals-table td { padding: 2px 0; font-size: 11px; }
+            .grand-row td { font-size: 14px; font-weight: 800; padding: 5px 0; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+            .barcode-box { text-align: center; margin: 12px 0 6px 0; font-family: monospace; letter-spacing: 4px; font-size: 12px; }
+            .footer-note { font-size: 9.5px; text-align: center; color: #333; margin-top: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="text-center">
+            <h1 class="store-name">GROCERYPRO</h1>
+            <div class="store-sub">${d.storeBranch}</div>
+            <div class="store-sub">Tel: +91 1800-GROCERY</div>
+          </div>
+          <div class="divider-dashed"></div>
+          <table class="meta-table">
+            <tr><td><strong>Receipt:</strong> ${d.receiptId}</td><td class="text-right">${d.dateStr}</td></tr>
+            <tr><td><strong>Register:</strong> ${d.lane}</td><td class="text-right">PAID</td></tr>
+          </table>
+          <div class="divider-solid"></div>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th align="left">Item</th>
+                <th class="text-right" width="40">Qty</th>
+                <th class="text-right" width="60">Price</th>
+                <th class="text-right" width="60">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${d.items.map(i => `
+                <tr>
+                  <td><strong>${capitalize(i.name)}</strong></td>
+                  <td class="text-right">${i.qty}</td>
+                  <td class="text-right">₹${i.price.toFixed(2)}</td>
+                  <td class="text-right">₹${i.total.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="divider-dashed"></div>
+          <table class="totals-table">
+            <tr>
+              <td>Subtotal:</td>
+              <td class="text-right">₹${d.subtotal.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td>Tax (8.25%):</td>
+              <td class="text-right">₹${d.tax.toFixed(2)}</td>
+            </tr>
+            <tr class="grand-row">
+              <td>TOTAL DUE:</td>
+              <td class="text-right">₹${d.grand.toFixed(2)}</td>
+            </tr>
+          </table>
+          <div class="barcode-box">
+            ||||| | |||| ||| |||| | |||||
+            <div style="font-size:9px; letter-spacing:1px; margin-top:2px;">*${d.receiptId}*</div>
+          </div>
+          <div class="footer-note">
+            Thank you for shopping at GroceryPro!<br/>
+            Items returnable within 14 days with receipt.
+          </div>
+        </body>
+        </html>
+      `;
+    }
+
     function closeReceipt() {
       document.getElementById('receipt-modal').classList.remove('open');
     }

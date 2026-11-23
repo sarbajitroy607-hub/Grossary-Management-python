@@ -361,10 +361,13 @@
         </div>
         <div class="demo-pills">
           <div class="demo-pill" onclick="fillAdmin()">
-            <span class="dot dot-admin"></span> Fill Admin (Full)
+            <span class="dot dot-admin"></span> Fill Admin (123456)
+          </div>
+          <div class="demo-pill" onclick="fillCashier()">
+            <span class="dot dot-cashier"></span> Fill Cashier POS (123456)
           </div>
           <div class="demo-pill" onclick="fillUser()">
-            <span class="dot dot-cashier"></span> Fill User
+            <span class="dot dot-kiosk"></span> Fill Customer (Guest)
           </div>
         </div>
       </div>
@@ -401,6 +404,12 @@
     function fillAdmin() {
       selectRole('admin');
       document.getElementById('email-input').value = 'admin@gmail.com';
+      document.getElementById('pass-input').value = '123456';
+    }
+
+    function fillCashier() {
+      selectRole('cashier');
+      document.getElementById('email-input').value = 'cashier@store.io';
       document.getElementById('pass-input').value = '123456';
     }
 
@@ -462,7 +471,8 @@
         if (data.success) {
           btn.innerHTML = '<span class="material-icons">check_circle</span> Authenticated!';
           btn.style.background = '#15803d';
-          setTimeout(() => { window.location.href = '/admin'; }, 600);
+          const targetUrl = (data.role === 'cashier' || selectedRole === 'cashier') ? '/cashier' : '/admin';
+          setTimeout(() => { window.location.href = targetUrl; }, 600);
         } else {
           showError(data.message || 'Invalid credentials. Please try again.');
           btn.disabled = false;
