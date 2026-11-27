@@ -285,6 +285,137 @@ class TestDatabaseAndAPI(unittest.TestCase):
         self.assertEqual(me_after_res.status_code, 200)
         self.assertFalse(me_after_res.get_json()["logged_in"])
 
+    def test_10_staff_authentication_and_hashing(self):
+        """Test staff password hashing and secure login authentication."""
+        # Check staff users exist in DB with hashed passwords
+        staff_users = database.get_all_staff_users()
+        self.assertGreaterEqual(len(staff_users), 2)
+        admin_user = next((u for u in staff_users if u["email"] == "admin@gmail.com"), None)
+        self.assertIsNotNone(admin_user)
+        self.assertEqual(admin_user["role"], "admin")
+
+        # Database direct check: passwords are not stored in plaintext
+        with database.get_db() as db:
+            raw_admin = db.query(database.StaffUser).filter_by(email="admin@gmail.com").first()
+            self.assertNotEqual(raw_admin.password_hash, "123456")
+            self.assertTrue(raw_admin.password_hash.startswith("scrypt:") or raw_admin.password_hash.startswith("pbkdf2:"))
+
+        # Authenticate with username
+        auth_admin_uname = database.authenticate_staff("admin", "123456")
+        self.assertIsNotNone(auth_admin_uname)
+        self.assertEqual(auth_admin_uname["role"], "admin")
+
+        # Authenticate with email
+        auth_admin_email = database.authenticate_staff("admin@gmail.com", "123456")
+        self.assertIsNotNone(auth_admin_email)
+
+        # Authenticate cashier
+        auth_cashier = database.authenticate_staff("cashier@store.io", "123456")
+        self.assertIsNotNone(auth_cashier)
+        self.assertEqual(auth_cashier["role"], "cashier")
+
+        # Authentication failure with wrong password
+        fail_auth = database.authenticate_staff("admin@gmail.com", "wrongpassword")
+        self.assertIsNone(fail_auth)
+
+        # Authentication failure with unknown user
+        fail_user = database.authenticate_staff("unknown@store.io", "123456")
+        self.assertIsNone(fail_user)
+
+    def test_11_role_based_access_control(self):
+        """Test RBAC route guards and API permissions for Admin and Cashier."""
+        # 1. Unauthenticated checks
+        # Page guards redirect to index (302)
+        res_admin_page = self.client.get("/admin")
+        self.assertEqual(res_admin_page.status_code, 302)
+        self.assertIn("error=", res_admin_page.location)
+
+        res_cashier_page = self.client.get("/cashier")
+        self.assertEqual(res_cashier_page.status_code, 302)
+        self.assertIn("error=", res_cashier_page.location)
+
+        # API guards reject with 403
+        res_z_report = self.client.get("/api/cashier/z_report")
+        self.assertEqual(res_z_report.status_code, 403)
+
+        res_admin_stock = self.client.post("/api/admin/stock", json={"item": "rice", "qty": 10})
+        self.assertEqual(res_admin_stock.status_code, 403)
+
+        res_admin_staff = self.client.get("/api/admin/staff")
+        self.assertEqual(res_admin_staff.status_code, 403)
+
+        # 2. Cashier Login Session
+        cashier_login = self.client.post("/api/admin/login", json={
+            "email": "cashier@store.io",
+            "password": "123456"
+        })
+        self.assertEqual(cashier_login.status_code, 200)
+        cashier_data = cashier_login.get_json()
+        self.assertTrue(cashier_data["success"])
+        self.assertEqual(cashier_data["role"], "cashier")
+
+        # Cashier CAN access cashier page and z_report
+        res_cashier_auth = self.client.get("/cashier")
+        self.assertEqual(res_cashier_auth.status_code, 200)
+
+        res_z_auth = self.client.get("/api/cashier/z_report")
+        self.assertEqual(res_z_auth.status_code, 200)
+
+        # Cashier CANNOT access admin page or admin APIs
+        res_admin_from_cashier = self.client.get("/admin")
+        self.assertEqual(res_admin_from_cashier.status_code, 302)
+
+        res_stock_from_cashier = self.client.post("/api/admin/stock", json={"item": "rice", "qty": 10})
+        self.assertEqual(res_stock_from_cashier.status_code, 403)
+
+        res_staff_from_cashier = self.client.get("/api/admin/staff")
+        self.assertEqual(res_staff_from_cashier.status_code, 403)
+
+        # Cashier logout
+        self.client.post("/api/admin/logout")
+
+        # 3. Admin Login Session
+        admin_login = self.client.post("/api/admin/login", json={
+            "email": "admin@gmail.com",
+            "password": "123456"
+        })
+        self.assertEqual(admin_login.status_code, 200)
+        self.assertEqual(admin_login.get_json()["role"], "admin")
+
+        # Admin CAN access admin page and cashier page
+        self.assertEqual(self.client.get("/admin").status_code, 200)
+        self.assertEqual(self.client.get("/cashier").status_code, 200)
+
+        # Admin CAN access admin APIs and cashier z_report
+        self.assertEqual(self.client.get("/api/cashier/z_report").status_code, 200)
+        self.assertEqual(self.client.get("/api/admin/staff").status_code, 200)
+
+        # Admin creates new staff user
+        unique_uname = f"cashier_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        create_staff_res = self.client.post("/api/admin/staff", json={
+            "username": unique_uname,
+            "email": f"{unique_uname}@store.io",
+            "password": "newpassword123",
+            "role": "cashier",
+            "name": "Jane Cashier"
+        })
+        self.assertEqual(create_staff_res.status_code, 201)
+        self.assertTrue(create_staff_res.get_json()["success"])
+
+        # Change staff password
+        pw_change_res = self.client.post("/api/admin/change_password", json={
+            "old_password": "123456",
+            "new_password": "updatedadminpass123"
+        })
+        self.assertEqual(pw_change_res.status_code, 200)
+        self.assertTrue(pw_change_res.get_json()["success"])
+
+        # Restore original password for idempotency
+        self.client.post("/api/admin/change_password", json={
+            "old_password": "updatedadminpass123",
+            "new_password": "123456"
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

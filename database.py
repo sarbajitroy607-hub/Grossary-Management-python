@@ -60,6 +60,32 @@ Base = declarative_base()
 
 
 # ── Models ───────────────────────────────────────────────────────────
+class StaffUser(Base):
+    __tablename__ = "staff_users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(120), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False, default="cashier")  # "admin" or "cashier"
+    name = Column(String(100), nullable=False)
+    is_active = Column(Integer, nullable=False, default=1)
+    last_login = Column(String(30), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "role": self.role,
+            "name": self.name,
+            "is_active": bool(self.is_active),
+            "last_login": self.last_login or "",
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else "",
+        }
+
+
 class Customer(Base):
     __tablename__ = "customers"
 
@@ -250,6 +276,27 @@ def init_db():
                 address="123 Market Street"
             )
             db.add(demo_cust)
+
+        # Seed default Admin and Cashier accounts if empty
+        if db.query(StaffUser).count() == 0:
+            admin_user = StaffUser(
+                username="admin",
+                email="admin@gmail.com",
+                password_hash=generate_password_hash("123456"),
+                role="admin",
+                name="Store Administrator",
+                is_active=1
+            )
+            cashier_user = StaffUser(
+                username="cashier",
+                email="cashier@store.io",
+                password_hash=generate_password_hash("123456"),
+                role="cashier",
+                name="Lane 04 Cashier",
+                is_active=1
+            )
+            db.add(admin_user)
+            db.add(cashier_user)
 
 
 # ── Product API ───────────────────────────────────────────────────────
@@ -492,4 +539,96 @@ def get_customer_orders(customer_id=None, customer_name=None, limit=50):
             query = query.filter(Sale.customer_name == str(customer_name).strip())
         sales = query.order_by(desc(Sale.id)).limit(limit).all()
         return [s.to_dict() for s in sales]
+
+
+# ── Staff (Admin & Cashier) Authentication API ───────────────────────
+def authenticate_staff(identifier, password):
+    """
+    Authenticate an Admin or Cashier staff member using either their email or username.
+    Verifies passwords securely against salted cryptographic hashes.
+    """
+    id_clean = str(identifier or "").strip().lower()
+    pass_clean = str(password or "").strip()
+    if not id_clean or not pass_clean:
+        return None
+
+    with get_db() as db:
+        staff = db.query(StaffUser).filter(
+            ((StaffUser.email == id_clean) | (StaffUser.username == id_clean)),
+            StaffUser.is_active == 1
+        ).first()
+
+        if staff and check_password_hash(staff.password_hash, pass_clean):
+            staff.last_login = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            return staff.to_dict()
+    return None
+
+
+def create_staff_user(username, email, password, role="cashier", name=""):
+    """Create a new staff user (Admin or Cashier)."""
+    uname_clean = str(username or "").strip().lower()
+    email_clean = str(email or "").strip().lower()
+    pass_clean = str(password or "").strip()
+    role_clean = str(role or "cashier").strip().lower()
+
+    if role_clean not in ["admin", "cashier"]:
+        return {"success": False, "message": "Role must be 'admin' or 'cashier'."}
+    if not uname_clean or len(uname_clean) < 3:
+        return {"success": False, "message": "Username must be at least 3 characters."}
+    if not email_clean or "@" not in email_clean:
+        return {"success": False, "message": "A valid email is required."}
+    if len(pass_clean) < 6:
+        return {"success": False, "message": "Password must be at least 6 characters."}
+
+    with get_db() as db:
+        existing = db.query(StaffUser).filter(
+            (StaffUser.username == uname_clean) | (StaffUser.email == email_clean)
+        ).first()
+        if existing:
+            return {"success": False, "message": "A user with this username or email already exists."}
+
+        new_staff = StaffUser(
+            username=uname_clean,
+            email=email_clean,
+            password_hash=generate_password_hash(pass_clean),
+            role=role_clean,
+            name=name.strip() or uname_clean.capitalize(),
+            is_active=1
+        )
+        db.add(new_staff)
+        db.flush()
+        return {"success": True, "user": new_staff.to_dict(), "message": f"{role_clean.capitalize()} created successfully!"}
+
+
+def change_staff_password(user_id, old_password, new_password):
+    """Securely change staff user password."""
+    if not user_id or not old_password or not new_password:
+        return {"success": False, "message": "All password fields are required."}
+    if len(str(new_password).strip()) < 6:
+        return {"success": False, "message": "New password must be at least 6 characters."}
+
+    with get_db() as db:
+        staff = db.query(StaffUser).filter(StaffUser.id == int(user_id)).first()
+        if not staff or not check_password_hash(staff.password_hash, str(old_password).strip()):
+            return {"success": False, "message": "Current password incorrect."}
+
+        staff.password_hash = generate_password_hash(str(new_password).strip())
+        return {"success": True, "message": "Password updated successfully."}
+
+
+def get_staff_user_by_id(user_id):
+    """Retrieve staff user by ID."""
+    if not user_id:
+        return None
+    with get_db() as db:
+        staff = db.query(StaffUser).filter(StaffUser.id == int(user_id)).first()
+        return staff.to_dict() if staff else None
+
+
+def get_all_staff_users():
+    """List all staff users."""
+    with get_db() as db:
+        users = db.query(StaffUser).order_by(StaffUser.id.asc()).all()
+        return [u.to_dict() for u in users]
+
 

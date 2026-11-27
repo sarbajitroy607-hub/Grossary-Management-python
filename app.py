@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from functools import wraps
+from datetime import timedelta
 import os
 import uuid
 
@@ -6,11 +8,16 @@ from database import (
     init_db, get_all_products, get_product,
     update_stock, add_product, record_sale, get_sales_history, get_z_report,
     close_db_session, register_customer, authenticate_customer,
-    get_customer_by_id, get_customer_by_email, get_customer_orders
+    get_customer_by_id, get_customer_by_email, get_customer_orders,
+    authenticate_staff, create_staff_user, change_staff_password,
+    get_staff_user_by_id, get_all_staff_users
 )
 
 app = Flask(__name__)
-app.secret_key = 'kiryana_store_secret_key_2024'
+app.secret_key = os.environ.get('SECRET_KEY', 'kiryana_store_secret_key_2024')
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.permanent_session_lifetime = timedelta(hours=8)
 
 # Cleanup SQLAlchemy scoped session on application context teardown
 @app.teardown_appcontext
@@ -22,6 +29,31 @@ carts = {}
 
 # ── Initialise database on startup ──────────────────────────────────
 init_db()
+
+
+# ── Role-Based Access Control (RBAC) Decorators ─────────────────────
+def admin_required(view_func):
+    """Ensure user has authenticated administrator session."""
+    @wraps(view_func)
+    def decorated_function(*args, **kwargs):
+        if not session.get("admin"):
+            if request.path.startswith("/api/"):
+                return jsonify({"success": False, "message": "Unauthorized: Administrator privileges required."}), 403
+            return redirect(url_for("index", role="admin", error="Admin session required"))
+        return view_func(*args, **kwargs)
+    return decorated_function
+
+
+def cashier_required(view_func):
+    """Ensure user has authenticated cashier or admin session."""
+    @wraps(view_func)
+    def decorated_function(*args, **kwargs):
+        if not (session.get("cashier") or session.get("admin")):
+            if request.path.startswith("/api/"):
+                return jsonify({"success": False, "message": "Unauthorized: Cashier or Admin access required."}), 403
+            return redirect(url_for("index", role="cashier", error="Cashier session required"))
+        return view_func(*args, **kwargs)
+    return decorated_function
 
 
 def get_cart():
@@ -42,10 +74,12 @@ def user_page():
     return render_template("user.html")
 
 @app.route("/cashier")
+@cashier_required
 def cashier_page():
     return render_template("cashier.html")
 
 @app.route("/admin")
+@admin_required
 def admin_page():
     return render_template("admin.html")
 
@@ -201,27 +235,42 @@ def api_checkout():
 
 
 @app.route("/api/cashier/z_report")
+@cashier_required
 def api_cashier_z_report():
     target_date = request.args.get("date")
     report = get_z_report(target_date)
     return jsonify({"success": True, "report": report})
 
 
-# ── Auth API ─────────────────────────────────────────────────────────
+# ── Staff (Admin & Cashier) Auth API ─────────────────────────────────
 @app.route("/api/admin/login", methods=["POST"])
 def api_admin_login():
     data = request.json or {}
-    email = str(data.get("email", "")).strip().lower()
+    identifier = str(data.get("email", "")).strip().lower()
     password = str(data.get("password", "")).strip()
 
-    if email == "admin@gmail.com" and password == "123456":
-        session["admin"] = True
-        session["role"] = "admin"
-        return jsonify({"success": True, "role": "admin"})
-    elif email in ["cashier@store.io", "cashier", "cashier@gmail.com"] and password in ["123456", "1234"]:
-        session["cashier"] = True
-        session["role"] = "cashier"
-        return jsonify({"success": True, "role": "cashier"})
+    if not identifier or not password:
+        return jsonify({"success": False, "message": "Email/Username and password required."}), 400
+
+    staff = authenticate_staff(identifier, password)
+    if staff:
+        # Prevent session fixation
+        sid = session.get("sid")
+        session.clear()
+        if sid:
+            session["sid"] = sid
+        session["user_id"] = staff["id"]
+        session["user_name"] = staff["name"]
+        session["user_email"] = staff["email"]
+        session["role"] = staff["role"]
+
+        if staff["role"] == "admin":
+            session["admin"] = True
+            session["cashier"] = True
+            return jsonify({"success": True, "role": "admin", "user": staff})
+        elif staff["role"] == "cashier":
+            session["cashier"] = True
+            return jsonify({"success": True, "role": "cashier", "user": staff})
 
     return jsonify({"success": False, "message": "Invalid credentials. For Admin use admin@gmail.com / 123456; For Cashier use cashier@store.io / 123456"}), 401
 
@@ -231,14 +280,48 @@ def api_admin_logout():
     session.pop("admin", None)
     session.pop("cashier", None)
     session.pop("role", None)
-    return jsonify({"success": True})
+    session.pop("user_id", None)
+    session.pop("user_name", None)
+    session.pop("user_email", None)
+    return jsonify({"success": True, "message": "Logged out successfully."})
+
+
+@app.route("/api/admin/change_password", methods=["POST"])
+@cashier_required
+def api_admin_change_password():
+    data = request.json or {}
+    old_password = str(data.get("old_password", "")).strip()
+    new_password = str(data.get("new_password", "")).strip()
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "message": "Staff session required."}), 401
+    result = change_staff_password(user_id, old_password, new_password)
+    status_code = 200 if result.get("success") else 400
+    return jsonify(result), status_code
+
+
+@app.route("/api/admin/staff", methods=["GET", "POST"])
+@admin_required
+def api_admin_staff():
+    if request.method == "POST":
+        data = request.json or {}
+        username = data.get("username", "")
+        email = data.get("email", "")
+        password = data.get("password", "")
+        role = data.get("role", "cashier")
+        name = data.get("name", "")
+        result = create_staff_user(username, email, password, role, name)
+        status_code = 201 if result.get("success") else 400
+        return jsonify(result), status_code
+    else:
+        staff_list = get_all_staff_users()
+        return jsonify({"success": True, "staff": staff_list})
 
 
 @app.route("/api/admin/stock", methods=["POST"])
+@admin_required
 def api_admin_stock():
-    if not session.get("admin"):
-        return jsonify({"success": False, "message": "Unauthorized."}), 403
-    data = request.json
+    data = request.json or {}
     item = data.get("item", "").lower().strip()
     try:
         qty = int(data.get("qty", 0))
@@ -252,10 +335,9 @@ def api_admin_stock():
 
 
 @app.route("/api/admin/add_item", methods=["POST"])
+@admin_required
 def api_admin_add_item():
-    if not session.get("admin"):
-        return jsonify({"success": False, "message": "Unauthorized."}), 403
-    data = request.json
+    data = request.json or {}
     item = data.get("item", "").lower().strip()
     try:
         qty   = int(data.get("qty", 0))
@@ -270,10 +352,9 @@ def api_admin_add_item():
 
 
 @app.route("/api/admin/sales")
+@admin_required
 def api_admin_sales():
     """Bonus endpoint: recent sales history."""
-    if not session.get("admin"):
-        return jsonify({"success": False, "message": "Unauthorized."}), 403
     return jsonify(get_sales_history())
 
 
