@@ -714,6 +714,12 @@
       } else {
         selectRole('admin');
       }
+
+      // Display redirected RBAC error message if present
+      const errorParam = urlParams.get('error');
+      if (errorParam) {
+        showError(decodeURIComponent(errorParam));
+      }
     })();
   </script>
   <style>

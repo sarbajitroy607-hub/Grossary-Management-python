@@ -1067,9 +1067,9 @@
       <button class="btn btn-sm btn-secondary" onclick="openZReportModal()" style="margin-left:8px;color:#95f8a7;background:rgba(0,109,48,0.25);border:1px solid #006d30;display:inline-flex;align-items:center;gap:4px;" title="Daily End-of-Day Register Report">
         <span class="material-icons" style="font-size:15px;">assessment</span> Z-Report (EOD)
       </button>
-      <a href="/" class="btn btn-sm btn-secondary" style="margin-left:8px;color:white;background:rgba(255,255,255,0.1);border-color:transparent;" title="Switch Terminal / Logout">
-        <span class="material-icons" style="font-size:15px;">logout</span> Switch
-      </a>
+      <button class="btn btn-sm btn-secondary" onclick="cashierLogout()" style="margin-left:8px;color:white;background:rgba(255,255,255,0.1);border-color:transparent;" title="Sign Out / Switch Terminal">
+        <span class="material-icons" style="font-size:15px;">logout</span> Sign Out
+      </button>
     </div>
   </header>
 
@@ -2758,6 +2758,13 @@
     }
 
     function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+    async function cashierLogout() {
+      try {
+        await fetch('/api/admin/logout', { method: 'POST' });
+      } catch (err) {}
+      window.location.href = '/?role=cashier';
+    }
 
     // Initialize on page load
     initPOS();
