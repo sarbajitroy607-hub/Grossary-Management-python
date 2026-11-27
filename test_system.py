@@ -167,6 +167,124 @@ class TestDatabaseAndAPI(unittest.TestCase):
         self.assertEqual(sales_res.status_code, 200)
         self.assertIsInstance(sales_res.get_json(), list)
 
+    def test_08_customer_registration_and_validation(self):
+        """Test customer registration, duplicate email handling, and password validation"""
+        unique_email = f"alice_{datetime.now().strftime('%Y%m%d%H%M%S%f')}@gmail.com"
+
+        # Invalid: missing name
+        res = self.client.post("/api/customer/register", json={
+            "name": "",
+            "email": unique_email,
+            "password": "password123"
+        })
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(res.get_json()["success"])
+
+        # Invalid: bad email
+        res = self.client.post("/api/customer/register", json={
+            "name": "Alex Smith",
+            "email": "notanemail",
+            "password": "password123"
+        })
+        self.assertEqual(res.status_code, 400)
+
+        # Invalid: short password
+        res = self.client.post("/api/customer/register", json={
+            "name": "Alex Smith",
+            "email": unique_email,
+            "password": "12"
+        })
+        self.assertEqual(res.status_code, 400)
+
+        # Valid registration
+        res = self.client.post("/api/customer/register", json={
+            "name": "Alice Wonder",
+            "email": unique_email,
+            "password": "alicepass123",
+            "phone": "9876501234",
+            "address": "42 Wonderland Ave"
+        })
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["customer"]["name"], "Alice Wonder")
+        self.assertEqual(data["customer"]["email"], unique_email)
+
+        # Duplicate email registration should fail
+        dup_res = self.client.post("/api/customer/register", json={
+            "name": "Alice Duplicate",
+            "email": unique_email,
+            "password": "anotherpass"
+        })
+        self.assertEqual(dup_res.status_code, 400)
+        self.assertFalse(dup_res.get_json()["success"])
+
+    def test_09_customer_login_session_checkout_flow(self):
+        """Test customer login, session retrieval (/api/customer/me), checkout association, and logout"""
+        # Register a unique customer for login test
+        unique_login_email = f"bob_{datetime.now().strftime('%Y%m%d%H%M%S%f')}@gmail.com"
+        reg_res = self.client.post("/api/customer/register", json={
+            "name": "Bob Builder",
+            "email": unique_login_email,
+            "password": "bobpassword123"
+        })
+        self.assertEqual(reg_res.status_code, 200)
+
+        # Logout from registration auto-login to test explicit login
+        self.client.post("/api/customer/logout")
+
+        # Wrong password
+        bad_res = self.client.post("/api/customer/login", json={
+            "email": unique_login_email,
+            "password": "wrongpassword"
+        })
+        self.assertEqual(bad_res.status_code, 401)
+        self.assertFalse(bad_res.get_json()["success"])
+
+        # Correct login
+        login_res = self.client.post("/api/customer/login", json={
+            "email": unique_login_email,
+            "password": "bobpassword123"
+        })
+        self.assertEqual(login_res.status_code, 200)
+        login_data = login_res.get_json()
+        self.assertTrue(login_data["success"])
+        self.assertEqual(login_data["customer"]["name"], "Bob Builder")
+
+        # Check /api/customer/me
+        me_res = self.client.get("/api/customer/me")
+        self.assertEqual(me_res.status_code, 200)
+        me_data = me_res.get_json()
+        self.assertTrue(me_data["logged_in"])
+        self.assertEqual(me_data["customer"]["email"], unique_login_email)
+
+        # Make a purchase while logged in
+        database.update_stock("rice", 20)
+        self.client.post("/api/cart/add", json={"item": "rice", "qty": 1})
+        checkout_res = self.client.post("/api/checkout", json={"payment_method": "Card"})
+        self.assertEqual(checkout_res.status_code, 200)
+        c_data = checkout_res.get_json()
+        self.assertTrue(c_data["success"])
+        self.assertIsNotNone(c_data.get("customer"))
+        self.assertEqual(c_data["customer"]["name"], "Bob Builder")
+
+        # Customer order history
+        orders_res = self.client.get("/api/customer/orders")
+        self.assertEqual(orders_res.status_code, 200)
+        orders = orders_res.get_json()["orders"]
+        self.assertGreater(len(orders), 0)
+        self.assertEqual(orders[0]["customer_name"], "Bob Builder")
+
+        # Logout
+        logout_res = self.client.post("/api/customer/logout")
+        self.assertEqual(logout_res.status_code, 200)
+        self.assertTrue(logout_res.get_json()["success"])
+
+        # Verify /api/customer/me shows logged out
+        me_after_res = self.client.get("/api/customer/me")
+        self.assertEqual(me_after_res.status_code, 200)
+        self.assertFalse(me_after_res.get_json()["logged_in"])
+
 
 if __name__ == "__main__":
     unittest.main()

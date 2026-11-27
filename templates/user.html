@@ -107,11 +107,6 @@
       font-size:10px;font-weight:700;padding:2px 7px;
       border-radius:100px;
     }
-    /* Item emoji map */
-    .item-emojis {
-      rice:'🌾'; wheat:'🌿'; flour:'🍞'; oil:'🫙';
-      daal:'🫛'; soap:'🧼'; surf:'🧺';
-    }
     /* Qty row in card */
     .card-controls { display:flex;align-items:center;gap:6px;margin-top:auto; }
     /* product-card MUST be position:relative so the overlay stays inside it */
@@ -437,12 +432,18 @@
         <span class="status-dot"></span>
         Store Open · POS Online
       </div>
-      <div class="user-chip">
+      <div class="user-chip" id="customer-user-chip">
         <div class="user-info">
-          <div class="user-name">Walk-In / Guest</div>
-          <div class="user-role">Customer Lane</div>
+          <div class="user-name" id="header-user-name">Walk-In / Guest</div>
+          <div class="user-role" id="header-user-role">Customer Lane</div>
         </div>
-        <div class="avatar">G</div>
+        <div class="avatar" id="header-user-avatar">G</div>
+        <button id="cust-signout-btn" onclick="customerLogout()" class="hidden btn btn-sm btn-secondary" style="padding:4px 8px;font-size:11px;margin-left:6px;" title="Sign Out">
+          <span class="material-icons" style="font-size:14px;">logout</span>
+        </button>
+        <a id="cust-signin-btn" href="/?role=user" class="btn btn-sm btn-primary" style="padding:4px 10px;font-size:11px;margin-left:6px;gap:3px;" title="Sign In or Register">
+          <span class="material-icons" style="font-size:14px;">person</span> Sign In
+        </a>
       </div>
     </div>
   </header>
@@ -462,7 +463,7 @@
     </div>
     <div>
       <div class="sidebar-section-label">Access Mode</div>
-      <div class="sidebar-role-card">
+      <div class="sidebar-role-card" onclick="window.location.href='/'" style="cursor:pointer;" title="Switch Role">
         <div class="role-info">
           <span class="material-icons role-icon">swap_horiz</span>
           <div>
@@ -669,7 +670,7 @@
       <div class="cart-header">
         <div>
           <div class="cart-title">Active Register Cart</div>
-          <div style="font-size:10px;color:var(--outline);font-weight:600;margin-top:2px;">Terminal Lane 02 · Customer: Walk-In / Guest</div>
+          <div style="font-size:10px;color:var(--outline);font-weight:600;margin-top:2px;">Terminal Lane 02 · Customer: <span id="cart-customer-name">Walk-In / Guest</span></div>
         </div>
         <div class="flex items-center gap-sm">
           <span class="cart-count-badge" id="cart-badge">0</span>
@@ -821,14 +822,27 @@
 
     /* ── Load items ── */
     async function loadItems() {
-      const res = await fetch('/api/items');
-      allItems = await res.json();
-      document.getElementById('total-skus').textContent = allItems.length;
-      allItems.forEach(i => {
-        if (!qtyMap[i.name]) qtyMap[i.name] = 1;
-      });
-      updateCategoryCounts();
-      renderProducts();
+      try {
+        const res = await fetch('/api/items');
+        if (!res.ok) throw new Error('Failed to load items: ' + res.status);
+        allItems = await res.json();
+        const totalEl = document.getElementById('total-skus');
+        if (totalEl) totalEl.textContent = allItems.length;
+        allItems.forEach(i => {
+          if (!qtyMap[i.name]) qtyMap[i.name] = 1;
+        });
+        updateCategoryCounts();
+        renderProducts();
+      } catch (err) {
+        console.error('loadItems error:', err);
+        const grid = document.getElementById('product-grid');
+        if (grid) {
+          grid.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--error);">
+            <span class="material-icons" style="font-size:36px;">error_outline</span>
+            <p style="margin-top:8px;font-size:13px;">Unable to load products. Please check connection.</p>
+          </div>`;
+        }
+      }
     }
 
     /* ── Update category counts ── */
@@ -849,9 +863,14 @@
 
     /* ── Load cart ── */
     async function loadCart() {
-      const res = await fetch('/api/cart');
-      cartData = await res.json();
-      renderCart();
+      try {
+        const res = await fetch('/api/cart');
+        if (!res.ok) throw new Error('Failed to load cart');
+        cartData = await res.json();
+        renderCart();
+      } catch (err) {
+        console.error('loadCart error:', err);
+      }
     }
 
     /* ── Search Highlighting ── */
@@ -1048,16 +1067,31 @@
     }
 
     async function checkout() {
-      const res = await fetch('/api/checkout', {method:'POST'});
-      const data = await res.json();
-      if (data.success) {
-        const tax = data.grand_total * 0.0825;
-        const grand = data.grand_total + tax;
-        showReceipt(data.receipt, data.grand_total, tax, grand);
-        await loadItems();
-        await loadCart();
-      } else {
-        showToast(data.message, 'error');
+      const btn = document.getElementById('checkout-btn');
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({payment_method: 'Cash'})
+        });
+        const data = await res.json();
+        if (data.success) {
+          const subtotal = Number(data.grand_total || 0);
+          const tax = Number(data.tax !== undefined ? data.tax : (subtotal * 0.0825));
+          const grand = Number(data.final_due !== undefined ? data.final_due : (subtotal + tax));
+          showReceipt(data.receipt, subtotal, tax, grand);
+          await loadItems();
+          await loadCart();
+        } else {
+          showToast(data.message || 'Checkout failed.', 'error');
+        }
+      } catch (err) {
+        console.error('checkout error:', err);
+        showToast('Connection error during checkout.', 'error');
+      } finally {
+        if (btn) btn.disabled = false;
       }
     }
 
@@ -1085,7 +1119,7 @@
         storeName: 'GroceryPro Store',
         storeBranch: 'Downtown Flagship · Store #104',
         lane: 'Lane 02 (Customer POS)',
-        cashier: 'Customer Self-Checkout'
+        cashier: currentCustomer ? `${currentCustomer.name} (${currentCustomer.email})` : 'Walk-In Customer'
       };
 
       renderReceiptSlip(currentReceiptData);
@@ -1104,6 +1138,7 @@
           <div style="font-size:10px;color:var(--outline);margin-top:4px;">
             Receipt: <strong>${d.receiptId}</strong> · ${d.dateStr}
           </div>
+          ${d.cashier ? `<div style="font-size:10px;color:var(--primary);margin-top:2px;font-weight:700;">Customer / Lane: ${d.cashier}</div>` : ''}
         </div>
 
         <table class="receipt-table">
@@ -1548,7 +1583,55 @@
 
     function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+    /* ── Customer Session Management ── */
+    let currentCustomer = null;
+
+    async function checkCustomerAuth() {
+      try {
+        const res = await fetch('/api/customer/me');
+        const data = await res.json();
+        const headerName = document.getElementById('header-user-name');
+        const headerRole = document.getElementById('header-user-role');
+        const headerAvatar = document.getElementById('header-user-avatar');
+        const cartCustomer = document.getElementById('cart-customer-name');
+        const signoutBtn = document.getElementById('cust-signout-btn');
+        const signinBtn = document.getElementById('cust-signin-btn');
+
+        if (data.logged_in && data.customer) {
+          currentCustomer = data.customer;
+          if (headerName) headerName.textContent = data.customer.name;
+          if (headerRole) headerRole.textContent = data.customer.email;
+          if (headerAvatar) headerAvatar.textContent = data.customer.name.charAt(0).toUpperCase();
+          if (cartCustomer) cartCustomer.textContent = data.customer.name;
+          if (signoutBtn) signoutBtn.classList.remove('hidden');
+          if (signinBtn) signinBtn.classList.add('hidden');
+        } else {
+          currentCustomer = null;
+          if (headerName) headerName.textContent = 'Walk-In / Guest';
+          if (headerRole) headerRole.textContent = 'Customer Lane';
+          if (headerAvatar) headerAvatar.textContent = 'G';
+          if (cartCustomer) cartCustomer.textContent = 'Walk-In / Guest';
+          if (signoutBtn) signoutBtn.classList.add('hidden');
+          if (signinBtn) signinBtn.classList.remove('hidden');
+        }
+      } catch (e) {
+        console.error('Failed checking customer auth:', e);
+      }
+    }
+
+    async function customerLogout() {
+      try {
+        const res = await fetch('/api/customer/logout', {method: 'POST'});
+        const data = await res.json();
+        showToast(data.message || 'Signed out successfully.', 'warning');
+        await checkCustomerAuth();
+      } catch (e) {
+        showToast('Logout error.', 'error');
+      }
+    }
+
     /* ── Init ── */
+    checkCustomerAuth();
     loadItems();
     loadCart();
   </script>

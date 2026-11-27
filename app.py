@@ -5,7 +5,8 @@ import uuid
 from database import (
     init_db, get_all_products, get_product,
     update_stock, add_product, record_sale, get_sales_history, get_z_report,
-    close_db_session
+    close_db_session, register_customer, authenticate_customer,
+    get_customer_by_id, get_customer_by_email, get_customer_orders
 )
 
 app = Flask(__name__)
@@ -166,13 +167,19 @@ def api_checkout():
     actual_tender = tender_amount if (payment_method == "Cash" and tender_amount > 0) else final_due
     change_due = max(0.0, round(actual_tender - final_due, 2)) if payment_method == "Cash" else 0.0
 
+    cust_id = session.get("customer_id")
+    cust_name = session.get("customer_name")
+    cust_email = session.get("customer_email")
+
     # Persist each sale line to the database
     for item in receipt:
         record_sale(
             sid, item["name"], item["qty"], item["price"],
             payment_method=payment_method,
             tender_amount=actual_tender,
-            change_due=change_due
+            change_due=change_due,
+            customer_id=cust_id,
+            customer_name=cust_name
         )
 
     cart.clear()
@@ -184,7 +191,12 @@ def api_checkout():
         "final_due": final_due,
         "payment_method": payment_method,
         "tender_amount": tender_amount,
-        "change_due": change_due
+        "change_due": change_due,
+        "customer": {
+            "id": cust_id,
+            "name": cust_name,
+            "email": cust_email
+        } if cust_id else None
     })
 
 
@@ -263,6 +275,93 @@ def api_admin_sales():
     if not session.get("admin"):
         return jsonify({"success": False, "message": "Unauthorized."}), 403
     return jsonify(get_sales_history())
+
+
+# ── Customer Auth API ────────────────────────────────────────────────
+@app.route("/api/customer/register", methods=["POST"])
+def api_customer_register():
+    data = request.json or {}
+    name = data.get("name", "")
+    email = data.get("email", "")
+    password = data.get("password", "")
+    phone = data.get("phone", "")
+    address = data.get("address", "")
+
+    result = register_customer(name, email, password, phone, address)
+    if not result.get("success"):
+        return jsonify(result), 400
+
+    customer = result["customer"]
+    session["customer_id"] = customer["id"]
+    session["customer_name"] = customer["name"]
+    session["customer_email"] = customer["email"]
+    session["role"] = "customer"
+
+    return jsonify({
+        "success": True,
+        "message": "Registration successful! You are now logged in.",
+        "customer": customer
+    })
+
+
+@app.route("/api/customer/login", methods=["POST"])
+def api_customer_login():
+    data = request.json or {}
+    email = data.get("email", "")
+    password = data.get("password", "")
+
+    customer = authenticate_customer(email, password)
+    if not customer:
+        return jsonify({"success": False, "message": "Invalid email or password."}), 401
+
+    session["customer_id"] = customer["id"]
+    session["customer_name"] = customer["name"]
+    session["customer_email"] = customer["email"]
+    session["role"] = "customer"
+
+    return jsonify({
+        "success": True,
+        "message": f"Welcome back, {customer['name']}!",
+        "customer": customer
+    })
+
+
+@app.route("/api/customer/logout", methods=["POST"])
+def api_customer_logout():
+    session.pop("customer_id", None)
+    session.pop("customer_name", None)
+    session.pop("customer_email", None)
+    if session.get("role") == "customer":
+        session.pop("role", None)
+    return jsonify({"success": True, "message": "Logged out successfully."})
+
+
+@app.route("/api/customer/me")
+def api_customer_me():
+    customer_id = session.get("customer_id")
+    if not customer_id:
+        return jsonify({"logged_in": False})
+
+    customer = get_customer_by_id(customer_id)
+    if not customer:
+        session.pop("customer_id", None)
+        session.pop("customer_name", None)
+        session.pop("customer_email", None)
+        return jsonify({"logged_in": False})
+
+    return jsonify({
+        "logged_in": True,
+        "customer": customer
+    })
+
+
+@app.route("/api/customer/orders")
+def api_customer_orders():
+    customer_id = session.get("customer_id")
+    if not customer_id:
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    orders = get_customer_orders(customer_id=customer_id)
+    return jsonify({"success": True, "orders": orders})
 
 
 if __name__ == "__main__":

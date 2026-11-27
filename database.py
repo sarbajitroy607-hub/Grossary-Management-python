@@ -20,8 +20,10 @@ from sqlalchemy import (
     create_engine,
     desc,
     func,
+    text,
 )
 from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # ── Paths & Configuration ───────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -58,6 +60,28 @@ Base = declarative_base()
 
 
 # ── Models ───────────────────────────────────────────────────────────
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    email = Column(String(120), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    phone = Column(String(20), nullable=True)
+    address = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "email": self.email,
+            "phone": self.phone or "",
+            "address": self.address or "",
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else "",
+        }
+
+
 class Product(Base):
     __tablename__ = "products"
 
@@ -83,6 +107,8 @@ class Sale(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(String(100), index=True, nullable=True)
+    customer_id = Column(Integer, index=True, nullable=True)
+    customer_name = Column(String(100), nullable=True)
     item_name = Column(String(100), nullable=False)
     qty = Column(Integer, nullable=False, default=1)
     unit_price = Column(Float, nullable=False)
@@ -95,6 +121,8 @@ class Sale(Base):
     def to_dict(self):
         return {
             "session_id": self.session_id,
+            "customer_id": self.customer_id,
+            "customer_name": self.customer_name,
             "item_name": self.item_name,
             "qty": self.qty,
             "unit_price": self.unit_price,
@@ -134,6 +162,19 @@ def init_db():
     """
     os.makedirs(DATA_DIR, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+
+    # Safely migrate existing tables if columns are missing
+    try:
+        with engine.connect() as conn:
+            res = conn.execute(text("PRAGMA table_info(sales);")).fetchall()
+            cols = [r[1] for r in res]
+            if "customer_id" not in cols:
+                conn.execute(text("ALTER TABLE sales ADD COLUMN customer_id INTEGER;"))
+            if "customer_name" not in cols:
+                conn.execute(text("ALTER TABLE sales ADD COLUMN customer_name VARCHAR(100);"))
+            conn.commit()
+    except Exception:
+        pass
 
     with get_db() as db:
         # Check products table
@@ -199,6 +240,17 @@ def init_db():
             except Exception as e:
                 print(f"Warning: Failed migrating sales from CSV: {e}")
 
+        # Seed demo customer if empty
+        if db.query(Customer).count() == 0:
+            demo_cust = Customer(
+                name="Demo Shopper",
+                email="customer@gmail.com",
+                password_hash=generate_password_hash("customer123"),
+                phone="9876543210",
+                address="123 Market Street"
+            )
+            db.add(demo_cust)
+
 
 # ── Product API ───────────────────────────────────────────────────────
 def get_all_products():
@@ -263,7 +315,9 @@ def record_sale(
     unit_price,
     payment_method="Cash",
     tender_amount=0.0,
-    change_due=0.0
+    change_due=0.0,
+    customer_id=None,
+    customer_name=None,
 ):
     """Insert one sale record with tender reconciliation into SQLite."""
     sold_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -275,6 +329,8 @@ def record_sale(
     with get_db() as db:
         sale = Sale(
             session_id=session_id,
+            customer_id=int(customer_id) if customer_id else None,
+            customer_name=str(customer_name).strip() if customer_name else None,
             item_name=clean_item,
             qty=qty_int,
             unit_price=price_val,
@@ -360,3 +416,80 @@ def get_z_report(target_date=None):
         },
         "top_products": top_products
     }
+
+
+# ── Customer Authentication & Management API ──────────────────────────
+def register_customer(name, email, password, phone="", address=""):
+    """Register a new customer with a securely hashed password."""
+    name_clean = str(name or "").strip()
+    email_clean = str(email or "").strip().lower()
+    pass_clean = str(password or "").strip()
+
+    if not name_clean:
+        return {"success": False, "message": "Customer name is required."}
+    if not email_clean or "@" not in email_clean or "." not in email_clean:
+        return {"success": False, "message": "A valid email address is required."}
+    if len(pass_clean) < 4:
+        return {"success": False, "message": "Password must be at least 4 characters long."}
+
+    with get_db() as db:
+        existing = db.query(Customer).filter(Customer.email == email_clean).first()
+        if existing:
+            return {"success": False, "message": f"An account with email '{email_clean}' already exists."}
+
+        new_customer = Customer(
+            name=name_clean,
+            email=email_clean,
+            password_hash=generate_password_hash(pass_clean),
+            phone=str(phone or "").strip(),
+            address=str(address or "").strip()
+        )
+        db.add(new_customer)
+        db.flush()
+        return {"success": True, "customer": new_customer.to_dict(), "message": "Account created successfully!"}
+
+
+def authenticate_customer(email, password):
+    """Verify customer credentials. Returns customer dict on success, None on failure."""
+    email_clean = str(email or "").strip().lower()
+    pass_clean = str(password or "").strip()
+    if not email_clean or not pass_clean:
+        return None
+
+    with get_db() as db:
+        cust = db.query(Customer).filter(Customer.email == email_clean).first()
+        if cust and check_password_hash(cust.password_hash, pass_clean):
+            return cust.to_dict()
+    return None
+
+
+def get_customer_by_id(customer_id):
+    """Retrieve customer by ID."""
+    if not customer_id:
+        return None
+    with get_db() as db:
+        cust = db.query(Customer).filter(Customer.id == int(customer_id)).first()
+        return cust.to_dict() if cust else None
+
+
+def get_customer_by_email(email):
+    """Retrieve customer by email."""
+    if not email:
+        return None
+    email_clean = str(email).strip().lower()
+    with get_db() as db:
+        cust = db.query(Customer).filter(Customer.email == email_clean).first()
+        return cust.to_dict() if cust else None
+
+
+def get_customer_orders(customer_id=None, customer_name=None, limit=50):
+    """Retrieve orders placed by a specific customer."""
+    with get_db() as db:
+        query = db.query(Sale)
+        if customer_id:
+            query = query.filter(Sale.customer_id == int(customer_id))
+        elif customer_name:
+            query = query.filter(Sale.customer_name == str(customer_name).strip())
+        sales = query.order_by(desc(Sale.id)).limit(limit).all()
+        return [s.to_dict() for s in sales]
+

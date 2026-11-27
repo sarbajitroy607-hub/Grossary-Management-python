@@ -304,18 +304,46 @@
         <span id="error-text">Invalid credentials. Please try again.</span>
       </div>
 
-      <div class="field-group">
-        <label class="field-label" for="email-input">Employee ID or Email</label>
+      <!-- Customer Auth Mode Switcher -->
+      <div id="customer-mode-toggle" class="hidden" style="margin-bottom:18px;">
+        <div style="display:flex;background:var(--surface-low);border:1.5px solid var(--surface-highest);border-radius:12px;padding:3px;gap:4px;">
+          <button type="button" id="tab-cust-login" onclick="setCustomerMode('login')" style="flex:1;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:var(--primary);color:white;transition:all .15s;">
+            Customer Sign In
+          </button>
+          <button type="button" id="tab-cust-register" onclick="setCustomerMode('register')" style="flex:1;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:transparent;color:var(--on-surface-variant);transition:all .15s;">
+            Create Account
+          </button>
+        </div>
+      </div>
+
+      <div id="name-section" class="field-group hidden">
+        <label class="field-label" for="name-input">Full Name</label>
         <div class="field-input-wrap">
-          <span class="material-icons field-ico">badge</span>
+          <span class="material-icons field-ico">person</span>
+          <input id="name-input" class="field-input" type="text" placeholder="e.g. John Doe" autocomplete="name"/>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" id="email-label" for="email-input">Employee ID or Email</label>
+        <div class="field-input-wrap">
+          <span class="material-icons field-ico" id="email-ico">badge</span>
           <input id="email-input" class="field-input" type="email" placeholder="admin@gmail.com" autocomplete="username"/>
         </div>
       </div>
 
-      <div id="password-section" class="field-group hidden">
+      <div id="phone-section" class="field-group hidden">
+        <label class="field-label" for="phone-input">Phone Number (Optional)</label>
+        <div class="field-input-wrap">
+          <span class="material-icons field-ico">phone</span>
+          <input id="phone-input" class="field-input" type="tel" placeholder="e.g. 9876543210" autocomplete="tel"/>
+        </div>
+      </div>
+
+      <div id="password-section" class="field-group">
         <div class="field-action">
-          <label class="field-label" for="pass-input">Security Key / Terminal PIN</label>
-          <span class="link text-xs" onclick="togglePass()">Supervisor Override?</span>
+          <label class="field-label" id="pass-label" for="pass-input">Security Key / Terminal PIN</label>
+          <span class="link text-xs" id="pass-help-link" onclick="showSupervisorHint()">Supervisor Override?</span>
         </div>
         <div class="field-input-wrap">
           <span class="material-icons field-ico">pin</span>
@@ -348,8 +376,13 @@
 
       <button class="sign-in-btn" id="sign-in-btn" onclick="handleLogin()">
         <span class="material-icons">login</span>
-        Sign In to Console
+        <span id="btn-text">Sign In to Console</span>
       </button>
+
+      <div id="guest-row" class="hidden" style="text-align:center;margin-top:-10px;margin-bottom:18px;">
+        <span style="font-size:12px;color:var(--outline);">Just browsing? </span>
+        <a href="/user" class="link" style="font-size:12px;font-weight:700;">Continue as Guest &rarr;</a>
+      </div>
 
       <div class="demo-row">
         <div class="demo-row-header">
@@ -366,8 +399,11 @@
           <div class="demo-pill" onclick="fillCashier()">
             <span class="dot dot-cashier"></span> Fill Cashier POS (123456)
           </div>
+          <div class="demo-pill" onclick="fillCustomer()">
+            <span class="dot" style="background:var(--primary);"></span> Customer (customer123)
+          </div>
           <div class="demo-pill" onclick="fillUser()">
-            <span class="dot dot-kiosk"></span> Fill Customer (Guest)
+            <span class="dot dot-kiosk"></span> Guest Shopper
           </div>
         </div>
       </div>
@@ -375,30 +411,125 @@
   </div>
 
   <script>
-    let selectedRole = null;
+    let selectedRole = 'admin';
+    let customerMode = 'login'; // 'login' or 'register'
+
+    function showSupervisorHint() {
+      showError('Supervisor Override: Use admin@gmail.com / Security Key: 123456');
+    }
 
     function selectRole(role) {
-      selectedRole = role;
+      selectedRole = role || 'admin';
       document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
-      document.getElementById('role-' + role).classList.add('selected');
+      const targetCard = document.getElementById('role-' + selectedRole);
+      if (targetCard) targetCard.classList.add('selected');
 
+      const nameSection = document.getElementById('name-section');
+      const emailLabel = document.getElementById('email-label');
+      const emailIco = document.getElementById('email-ico');
+      const emailInput = document.getElementById('email-input');
+      const phoneSection = document.getElementById('phone-section');
       const passSection = document.getElementById('password-section');
+      const passLabel = document.getElementById('pass-label');
+      const passHelp = document.getElementById('pass-help-link');
       const shiftSection = document.getElementById('shift-section');
+      const custToggle = document.getElementById('customer-mode-toggle');
+      const guestRow = document.getElementById('guest-row');
+      const btnText = document.getElementById('btn-text');
 
-      if (role === 'admin') {
-        passSection.classList.remove('hidden');
-        shiftSection.style.display = 'flex';
-        document.getElementById('email-input').placeholder = 'admin@gmail.com';
-      } else if (role === 'user') {
-        passSection.classList.add('hidden');
-        shiftSection.style.display = 'none';
-        document.getElementById('email-input').placeholder = 'Your name or guest ID';
-      } else {
-        passSection.classList.remove('hidden');
-        shiftSection.style.display = 'flex';
-        document.getElementById('email-input').placeholder = 'cashier@store.io';
-      }
       hideError();
+
+      if (selectedRole === 'admin') {
+        if (custToggle) custToggle.classList.add('hidden');
+        if (nameSection) nameSection.classList.add('hidden');
+        if (phoneSection) phoneSection.classList.add('hidden');
+        if (guestRow) guestRow.classList.add('hidden');
+        if (passSection) passSection.classList.remove('hidden');
+        if (shiftSection) shiftSection.style.display = 'flex';
+        if (emailLabel) emailLabel.textContent = 'Employee ID or Email';
+        if (emailIco) emailIco.textContent = 'badge';
+        if (emailInput) emailInput.placeholder = 'admin@gmail.com';
+        if (passLabel) passLabel.textContent = 'Security Key / Terminal PIN';
+        if (passHelp) passHelp.style.display = 'inline';
+        if (btnText) btnText.textContent = 'Sign In as Administrator';
+      } else if (selectedRole === 'cashier') {
+        if (custToggle) custToggle.classList.add('hidden');
+        if (nameSection) nameSection.classList.add('hidden');
+        if (phoneSection) phoneSection.classList.add('hidden');
+        if (guestRow) guestRow.classList.add('hidden');
+        if (passSection) passSection.classList.remove('hidden');
+        if (shiftSection) shiftSection.style.display = 'flex';
+        if (emailLabel) emailLabel.textContent = 'Cashier Terminal ID';
+        if (emailIco) emailIco.textContent = 'badge';
+        if (emailInput) emailInput.placeholder = 'cashier@store.io';
+        if (passLabel) passLabel.textContent = 'Cashier PIN';
+        if (passHelp) passHelp.style.display = 'inline';
+        if (btnText) btnText.textContent = 'Sign In to Cashier POS';
+      } else if (selectedRole === 'user') {
+        if (shiftSection) shiftSection.style.display = 'none';
+        if (custToggle) custToggle.classList.remove('hidden');
+        if (guestRow) guestRow.classList.remove('hidden');
+        if (passHelp) passHelp.style.display = 'none';
+        setCustomerMode(customerMode);
+      }
+    }
+        passHelp.style.display = 'inline';
+        btnText.textContent = 'Sign In to Cashier POS';
+      } else if (role === 'user') {
+        shiftSection.style.display = 'none';
+        custToggle.classList.remove('hidden');
+        guestRow.classList.remove('hidden');
+        passHelp.style.display = 'none';
+        setCustomerMode(customerMode);
+      }
+    }
+
+    function setCustomerMode(mode) {
+      customerMode = mode;
+      const tabLogin = document.getElementById('tab-cust-login');
+      const tabReg = document.getElementById('tab-cust-register');
+      const nameSection = document.getElementById('name-section');
+      const phoneSection = document.getElementById('phone-section');
+      const passSection = document.getElementById('password-section');
+      const emailLabel = document.getElementById('email-label');
+      const emailIco = document.getElementById('email-ico');
+      const emailInput = document.getElementById('email-input');
+      const passLabel = document.getElementById('pass-label');
+      const btnText = document.getElementById('btn-text');
+
+      hideError();
+
+      if (mode === 'login') {
+        tabLogin.style.background = 'var(--primary)';
+        tabLogin.style.color = 'white';
+        tabReg.style.background = 'transparent';
+        tabReg.style.color = 'var(--on-surface-variant)';
+
+        nameSection.classList.add('hidden');
+        phoneSection.classList.add('hidden');
+        passSection.classList.remove('hidden');
+
+        emailLabel.textContent = 'Customer Email';
+        emailIco.textContent = 'email';
+        emailInput.placeholder = 'customer@gmail.com';
+        passLabel.textContent = 'Account Password';
+        btnText.textContent = 'Sign In as Customer';
+      } else {
+        tabReg.style.background = 'var(--primary)';
+        tabReg.style.color = 'white';
+        tabLogin.style.background = 'transparent';
+        tabLogin.style.color = 'var(--on-surface-variant)';
+
+        nameSection.classList.remove('hidden');
+        phoneSection.classList.remove('hidden');
+        passSection.classList.remove('hidden');
+
+        emailLabel.textContent = 'Email Address';
+        emailIco.textContent = 'email';
+        emailInput.placeholder = 'your.name@example.com';
+        passLabel.textContent = 'Create Password (min. 4 chars)';
+        btnText.textContent = 'Create Account & Start Shopping';
+      }
     }
 
     function fillAdmin() {
@@ -413,9 +544,15 @@
       document.getElementById('pass-input').value = '123456';
     }
 
-    function fillUser() {
+    function fillCustomer() {
       selectRole('user');
-      document.getElementById('email-input').value = 'guest';
+      setCustomerMode('login');
+      document.getElementById('email-input').value = 'customer@gmail.com';
+      document.getElementById('pass-input').value = 'customer123';
+    }
+
+    function fillUser() {
+      window.location.href = '/user';
     }
 
     let passVisible = false;
@@ -445,14 +582,89 @@
         return;
       }
 
-      if (selectedRole === 'user') {
-        window.location.href = '/user';
-        return;
-      }
-
       const email = document.getElementById('email-input').value.trim();
       const password = document.getElementById('pass-input').value;
 
+      // Handle Customer Registration
+      if (selectedRole === 'user' && customerMode === 'register') {
+        const name = document.getElementById('name-input').value.trim();
+        const phone = document.getElementById('phone-input').value.trim();
+
+        if (!name) {
+          showError('Please enter your full name.');
+          return;
+        }
+        if (!email || !email.includes('@')) {
+          showError('Please enter a valid email address.');
+          return;
+        }
+        if (!password || password.length < 4) {
+          showError('Password must be at least 4 characters long.');
+          return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite;">sync</span> Creating Account…';
+
+        try {
+          const resp = await fetch('/api/customer/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, email, password, phone})
+          });
+          const data = await resp.json();
+          if (data.success) {
+            btn.innerHTML = '<span class="material-icons">check_circle</span> Welcome, ' + data.customer.name + '!';
+            btn.style.background = '#15803d';
+            setTimeout(() => { window.location.href = '/user'; }, 700);
+          } else {
+            showError(data.message || 'Registration failed. Please try again.');
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons">person_add</span> Create Account & Start Shopping';
+          }
+        } catch (e) {
+          showError('Connection error. Please try again.');
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-icons">person_add</span> Create Account & Start Shopping';
+        }
+        return;
+      }
+
+      // Handle Customer Login
+      if (selectedRole === 'user' && customerMode === 'login') {
+        if (!email || !password) {
+          showError('Please enter your email and password.');
+          return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite;">sync</span> Signing In…';
+
+        try {
+          const resp = await fetch('/api/customer/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email, password})
+          });
+          const data = await resp.json();
+          if (data.success) {
+            btn.innerHTML = '<span class="material-icons">check_circle</span> Welcome, ' + data.customer.name + '!';
+            btn.style.background = '#15803d';
+            setTimeout(() => { window.location.href = '/user'; }, 600);
+          } else {
+            showError(data.message || 'Invalid email or password.');
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons">login</span> Sign In as Customer';
+          }
+        } catch (e) {
+          showError('Connection error. Please try again.');
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-icons">login</span> Sign In as Customer';
+        }
+        return;
+      }
+
+      // Handle Admin & Cashier Login
       if (!email || !password) {
         showError('Please enter your Employee ID and Security Key.');
         return;
@@ -489,6 +701,20 @@
     document.addEventListener('keydown', e => {
       if (e.key === 'Enter') handleLogin();
     });
+
+    // Auto-select role on page load based on query param or default to admin
+    (function initLoginView() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const roleParam = urlParams.get('role');
+      if (roleParam && ['admin', 'cashier', 'user'].includes(roleParam)) {
+        selectRole(roleParam);
+        if (roleParam === 'user' && urlParams.get('mode') === 'register') {
+          setCustomerMode('register');
+        }
+      } else {
+        selectRole('admin');
+      }
+    })();
   </script>
   <style>
     @keyframes spin { to { transform: rotate(360deg); } }
