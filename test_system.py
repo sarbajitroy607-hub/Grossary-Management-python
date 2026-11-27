@@ -416,6 +416,212 @@ class TestDatabaseAndAPI(unittest.TestCase):
             "new_password": "123456"
         })
 
+    def test_12_persistent_shopping_cart(self):
+        """Test persistent shopping carts in SQLite, cross-session persistence, and login merge."""
+        # Ensure sufficient stock
+        database.update_stock("rice", 25)
+        database.update_stock("flour", 25)
+
+        # 1. Guest client adds items to cart
+        guest_client = app.test_client()
+        add1 = guest_client.post("/api/cart/add", json={"item": "rice", "qty": 3})
+        self.assertEqual(add1.status_code, 200)
+        add2 = guest_client.post("/api/cart/add", json={"item": "flour", "qty": 2})
+        self.assertEqual(add2.status_code, 200)
+
+        # Check in DB that CartItem records exist
+        with database.get_db() as db:
+            cart_rows = db.query(database.CartItem).all()
+            self.assertGreaterEqual(len(cart_rows), 2)
+            rice_row = db.query(database.CartItem).filter_by(item_name="rice").first()
+            self.assertIsNotNone(rice_row)
+            self.assertGreaterEqual(rice_row.qty, 3)
+
+        # 2. Register a new customer in this same guest session -> carts should merge into customer_id
+        cart_cust_email = f"cartuser_{datetime.now().strftime('%Y%m%d%H%M%S%f')}@store.io"
+        reg_res = guest_client.post("/api/customer/register", json={
+            "name": "Cart Customer",
+            "email": cart_cust_email,
+            "password": "cartpassword123"
+        })
+        self.assertEqual(reg_res.status_code, 200)
+        cust_id = reg_res.get_json()["customer"]["id"]
+
+        # Verify that CartItems now belong to cust_id in SQLite
+        with database.get_db() as db:
+            cust_items = db.query(database.CartItem).filter_by(customer_id=cust_id).all()
+            self.assertEqual(len(cust_items), 2)
+            names = [it.item_name for it in cust_items]
+            self.assertIn("rice", names)
+            self.assertIn("flour", names)
+
+        # 3. Simulate another browser / fresh session client logging into this customer account
+        second_client = app.test_client()
+        login_res = second_client.post("/api/customer/login", json={
+            "email": cart_cust_email,
+            "password": "cartpassword123"
+        })
+        self.assertEqual(login_res.status_code, 200)
+
+        # Second client gets cart -> persistent cart from SQLite is returned!
+        cart_view = second_client.get("/api/cart")
+        self.assertEqual(cart_view.status_code, 200)
+        cart_data = cart_view.get_json()
+        item_names = [i["name"] for i in cart_data["items"]]
+        self.assertIn("rice", item_names)
+        self.assertIn("flour", item_names)
+
+        # 4. Remove 1 item
+        rem_res = second_client.post("/api/cart/remove", json={"item": "rice", "qty": 1})
+        self.assertEqual(rem_res.status_code, 200)
+
+        # 5. Checkout
+        checkout_res = second_client.post("/api/checkout", json={"payment_method": "Cash", "tender_amount": 500.0})
+        self.assertEqual(checkout_res.status_code, 200)
+
+        # Verify SQLite cart is now cleared for this customer
+        with database.get_db() as db:
+            remaining = db.query(database.CartItem).filter_by(customer_id=cust_id).all()
+            self.assertEqual(len(remaining), 0)
+
+    def test_13_complete_product_crud(self):
+        """Test full Product CRUD: Create, Read (all/single), Update (price/stock/rename), Delete."""
+        test_prod_name = f"test_item_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+
+        # 1. CREATE
+        # Unauthorized check
+        unauth_create = self.client.post("/api/admin/product/create", json={
+            "name": test_prod_name, "price": 85.0, "stock": 20, "category": "Dairy"
+        })
+        self.assertEqual(unauth_create.status_code, 403)
+
+        # Authenticate as Admin
+        self.client.post("/api/admin/login", json={"email": "admin@gmail.com", "password": "123456"})
+
+        # Valid Create
+        create_res = self.client.post("/api/admin/product/create", json={
+            "name": test_prod_name,
+            "price": 85.0,
+            "stock": 20,
+            "category": "Dairy"
+        })
+        self.assertEqual(create_res.status_code, 201)
+        self.assertTrue(create_res.get_json()["success"])
+
+        # Duplicate Create rejection
+        dup_res = self.client.post("/api/admin/product/create", json={
+            "name": test_prod_name, "price": 90.0, "stock": 10
+        })
+        self.assertEqual(dup_res.status_code, 400)
+        self.assertFalse(dup_res.get_json()["success"])
+
+        # Invalid Price Create rejection
+        bad_price = self.client.post("/api/admin/product/create", json={
+            "name": f"{test_prod_name}_bad", "price": -10.0, "stock": 5
+        })
+        self.assertEqual(bad_price.status_code, 400)
+
+        # 2. READ
+        # Read single product
+        get_res = self.client.get(f"/api/items/{test_prod_name}")
+        self.assertEqual(get_res.status_code, 200)
+        prod_data = get_res.get_json()["product"]
+        self.assertEqual(prod_data["name"], test_prod_name)
+        self.assertEqual(prod_data["price"], 85.0)
+        self.assertEqual(prod_data["stock"], 20)
+        self.assertEqual(prod_data["category"], "Dairy")
+
+        # Read non-existent product returns 404
+        get_404 = self.client.get("/api/items/non_existent_item_xyz_999")
+        self.assertEqual(get_404.status_code, 404)
+
+        # 3. UPDATE
+        # Update price, stock, category
+        update_res = self.client.put(f"/api/admin/product/{test_prod_name}", json={
+            "price": 95.0,
+            "stock": 35,
+            "category": "Beverages"
+        })
+        self.assertEqual(update_res.status_code, 200)
+        self.assertTrue(update_res.get_json()["success"])
+
+        # Verify update persisted
+        updated_get = self.client.get(f"/api/items/{test_prod_name}").get_json()["product"]
+        self.assertEqual(updated_get["price"], 95.0)
+        self.assertEqual(updated_get["stock"], 35)
+        self.assertEqual(updated_get["category"], "Beverages")
+
+        # Rename product
+        renamed_name = f"{test_prod_name}_renamed"
+        rename_res = self.client.put(f"/api/admin/product/{test_prod_name}", json={
+            "new_name": renamed_name
+        })
+        self.assertEqual(rename_res.status_code, 200)
+
+        # Old name returns 404, new name returns 200
+        self.assertEqual(self.client.get(f"/api/items/{test_prod_name}").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/items/{renamed_name}").status_code, 200)
+
+        # 4. DELETE
+        del_res = self.client.delete(f"/api/admin/product/{renamed_name}")
+        self.assertEqual(del_res.status_code, 200)
+        self.assertTrue(del_res.get_json()["success"])
+
+        # Verify deleted
+        self.assertEqual(self.client.get(f"/api/items/{renamed_name}").status_code, 404)
+
+        # Subsequent delete returns 404
+        del_again = self.client.delete(f"/api/admin/product/{renamed_name}")
+        self.assertEqual(del_again.status_code, 404)
+
+    def test_14_transaction_safe_inventory_and_atomic_checkout(self):
+        """Test ACID atomic stock reservations, rollback safety, and atomic checkout."""
+        item = f"atomic_item_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        database.add_product(item, 50.0, 10, "Staples")
+
+        # Isolated test client
+        client = app.test_client()
+
+        # 1. Atomic reserve: add 4 items
+        res1 = client.post("/api/cart/add", json={"item": item, "qty": 4})
+        self.assertEqual(res1.status_code, 200)
+        prod = database.get_product(item)
+        self.assertEqual(prod["stock"], 6)
+
+        # 2. Oversell attempt: try to add 7 when only 6 remain
+        res2 = client.post("/api/cart/add", json={"item": item, "qty": 7})
+        self.assertEqual(res2.status_code, 400)
+        self.assertIn("Only 6 units in stock", res2.get_json()["message"])
+        # Verify stock remained at 6 and was NOT corrupted
+        prod = database.get_product(item)
+        self.assertEqual(prod["stock"], 6)
+
+        # 3. Partial remove: remove 2 items from cart
+        res3 = client.post("/api/cart/remove", json={"item": item, "qty": 2})
+        self.assertEqual(res3.status_code, 200)
+        # Stock restored from 6 to 8
+        prod = database.get_product(item)
+        self.assertEqual(prod["stock"], 8)
+
+        # 4. Atomic Checkout
+        checkout_res = client.post("/api/checkout", json={
+            "payment_method": "Cash",
+            "tender_amount": 200.0
+        })
+        self.assertEqual(checkout_res.status_code, 200)
+        data = checkout_res.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["grand_total"], 100.0) # 2 units @ 50.0
+        self.assertGreater(data["change_due"], 0)
+
+        # Cart should now be empty
+        cart_res = client.get("/api/cart")
+        self.assertEqual(len(cart_res.get_json()["items"]), 0)
+
+        # Final stock in DB remains 8 (10 initial - 2 purchased)
+        final_prod = database.get_product(item)
+        self.assertEqual(final_prod["stock"], 8)
+
 
 if __name__ == "__main__":
     unittest.main()

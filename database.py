@@ -160,6 +160,27 @@ class Sale(Base):
         }
 
 
+class CartItem(Base):
+    __tablename__ = "cart_items"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(100), index=True, nullable=True)
+    customer_id = Column(Integer, index=True, nullable=True)
+    item_name = Column(String(100), nullable=False)
+    qty = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "customer_id": self.customer_id,
+            "item_name": self.item_name,
+            "qty": self.qty,
+        }
+
+
 # ── Database Session Context Manager ─────────────────────────────────
 @contextmanager
 def get_db():
@@ -352,6 +373,114 @@ def add_product(name, price, qty, category="General"):
                 category=clean_cat
             )
             db.add(new_p)
+
+
+def create_product(name, price, stock, category="General"):
+    """
+    Explicitly create a new product.
+    Returns error if the product name already exists or inputs are invalid.
+    """
+    clean_name = str(name or "").lower().strip()
+    if not clean_name:
+        return {"success": False, "message": "Product name is required."}
+    try:
+        price_val = float(price)
+        stock_val = int(stock)
+    except (ValueError, TypeError):
+        return {"success": False, "message": "Valid price and stock quantity are required."}
+
+    if price_val <= 0:
+        return {"success": False, "message": "Price must be greater than zero."}
+    if stock_val < 0:
+        return {"success": False, "message": "Stock cannot be negative."}
+
+    clean_cat = str(category or "General").strip() or "General"
+
+    with get_db() as db:
+        existing = db.query(Product).filter(Product.name == clean_name).first()
+        if existing:
+            return {"success": False, "message": f"Product '{clean_name.capitalize()}' already exists."}
+
+        prod = Product(
+            name=clean_name,
+            price=price_val,
+            stock=stock_val,
+            category=clean_cat
+        )
+        db.add(prod)
+        db.flush()
+        return {"success": True, "product": prod.to_dict(), "message": f"'{clean_name.capitalize()}' created successfully!"}
+
+
+def update_product(name, new_name=None, price=None, stock=None, category=None):
+    """
+    Update details (name, price, stock, category) of an existing product.
+    """
+    clean_name = str(name or "").lower().strip()
+    if not clean_name:
+        return {"success": False, "message": "Product name is required."}
+
+    with get_db() as db:
+        prod = db.query(Product).filter(Product.name == clean_name).first()
+        if not prod:
+            return {"success": False, "message": f"Product '{clean_name.capitalize()}' not found."}
+
+        # Rename check if new_name provided
+        if new_name is not None:
+            clean_new_name = str(new_name).lower().strip()
+            if clean_new_name and clean_new_name != clean_name:
+                conflict = db.query(Product).filter(Product.name == clean_new_name).first()
+                if conflict:
+                    return {"success": False, "message": f"A product named '{clean_new_name.capitalize()}' already exists."}
+                prod.name = clean_new_name
+                # Update any associated cart items
+                db.query(CartItem).filter(CartItem.item_name == clean_name).update(
+                    {CartItem.item_name: clean_new_name}, synchronize_session=False
+                )
+
+        if price is not None:
+            try:
+                p_val = float(price)
+                if p_val <= 0:
+                    return {"success": False, "message": "Price must be greater than zero."}
+                prod.price = p_val
+            except (ValueError, TypeError):
+                return {"success": False, "message": "Invalid price value."}
+
+        if stock is not None:
+            try:
+                s_val = int(stock)
+                if s_val < 0:
+                    return {"success": False, "message": "Stock cannot be negative."}
+                prod.stock = s_val
+            except (ValueError, TypeError):
+                return {"success": False, "message": "Invalid stock value."}
+
+        if category is not None:
+            prod.category = str(category).strip() or "General"
+
+        prod.updated_at = datetime.now(timezone.utc)
+        return {"success": True, "product": prod.to_dict(), "message": "Product updated successfully."}
+
+
+def delete_product(name):
+    """
+    Delete a product and its active cart reservations.
+    """
+    clean_name = str(name or "").lower().strip()
+    if not clean_name:
+        return {"success": False, "message": "Product name is required."}
+
+    with get_db() as db:
+        prod = db.query(Product).filter(Product.name == clean_name).first()
+        if not prod:
+            return {"success": False, "message": f"Product '{clean_name.capitalize()}' not found."}
+
+        # Clean up any active cart items for this product
+        db.query(CartItem).filter(CartItem.item_name == clean_name).delete(synchronize_session=False)
+
+        db.delete(prod)
+        return {"success": True, "message": f"Product '{clean_name.capitalize()}' deleted successfully."}
 
 
 # ── Sales API ─────────────────────────────────────────────────────────
@@ -630,5 +759,359 @@ def get_all_staff_users():
     with get_db() as db:
         users = db.query(StaffUser).order_by(StaffUser.id.asc()).all()
         return [u.to_dict() for u in users]
+
+
+# ── Persistent Shopping Cart Operations ─────────────────────────────
+def get_cart_db(session_id=None, customer_id=None):
+    """
+    Retrieve shopping cart contents as a {item_name: qty} dictionary.
+    Prioritizes customer_id when logged in; falls back to session_id for guest users.
+    """
+    with get_db() as db:
+        items = []
+        if customer_id:
+            items = db.query(CartItem).filter(CartItem.customer_id == int(customer_id)).all()
+            if not items and session_id:
+                items = db.query(CartItem).filter(
+                    CartItem.session_id == str(session_id),
+                    CartItem.customer_id.is_(None)
+                ).all()
+        elif session_id:
+            items = db.query(CartItem).filter(
+                CartItem.session_id == str(session_id),
+                CartItem.customer_id.is_(None)
+            ).all()
+
+        cart = {}
+        for it in items:
+            cart[it.item_name] = cart.get(it.item_name, 0) + it.qty
+        return cart
+
+
+def add_to_cart_db(session_id, item_name, qty, customer_id=None):
+    """Add or increment item quantity in persistent cart."""
+    item_clean = str(item_name).lower().strip()
+    qty = int(qty)
+    if qty <= 0:
+        return False
+
+    with get_db() as db:
+        query = db.query(CartItem).filter(CartItem.item_name == item_clean)
+        if customer_id:
+            cart_row = query.filter(CartItem.customer_id == int(customer_id)).first()
+        else:
+            cart_row = query.filter(
+                CartItem.session_id == str(session_id),
+                CartItem.customer_id.is_(None)
+            ).first()
+
+        if cart_row:
+            cart_row.qty += qty
+            cart_row.updated_at = datetime.now(timezone.utc)
+        else:
+            cart_row = CartItem(
+                session_id=str(session_id) if session_id else None,
+                customer_id=int(customer_id) if customer_id else None,
+                item_name=item_clean,
+                qty=qty,
+            )
+            db.add(cart_row)
+        return True
+
+
+def remove_from_cart_db(session_id, item_name, qty, customer_id=None):
+    """Remove or decrement item quantity in persistent cart."""
+    item_clean = str(item_name).lower().strip()
+    qty = int(qty)
+    if qty <= 0:
+        return False
+
+    with get_db() as db:
+        query = db.query(CartItem).filter(CartItem.item_name == item_clean)
+        if customer_id:
+            cart_row = query.filter(CartItem.customer_id == int(customer_id)).first()
+        else:
+            cart_row = query.filter(
+                CartItem.session_id == str(session_id),
+                CartItem.customer_id.is_(None)
+            ).first()
+
+        if not cart_row:
+            return False
+
+        if qty >= cart_row.qty:
+            db.delete(cart_row)
+        else:
+            cart_row.qty -= qty
+            cart_row.updated_at = datetime.now(timezone.utc)
+        return True
+
+
+def clear_cart_db(session_id=None, customer_id=None):
+    """Clear all items in persistent cart for session or customer."""
+    with get_db() as db:
+        query = db.query(CartItem)
+        if customer_id:
+            query.filter(CartItem.customer_id == int(customer_id)).delete(synchronize_session=False)
+        if session_id:
+            query.filter(
+                CartItem.session_id == str(session_id),
+                CartItem.customer_id.is_(None)
+            ).delete(synchronize_session=False)
+        return True
+
+
+def merge_cart_on_login(session_id, customer_id):
+    """Merge guest cart items into customer's persistent cart upon login or registration."""
+    if not session_id or not customer_id:
+        return
+    with get_db() as db:
+        guest_items = db.query(CartItem).filter(
+            CartItem.session_id == str(session_id),
+            CartItem.customer_id.is_(None)
+        ).all()
+        if not guest_items:
+            return
+
+        for g_item in guest_items:
+            cust_item = db.query(CartItem).filter(
+                CartItem.customer_id == int(customer_id),
+                CartItem.item_name == g_item.item_name
+            ).first()
+            if cust_item:
+                cust_item.qty += g_item.qty
+                cust_item.updated_at = datetime.now(timezone.utc)
+                db.delete(g_item)
+            else:
+                g_item.customer_id = int(customer_id)
+                g_item.updated_at = datetime.now(timezone.utc)
+
+
+# ── Transaction-Safe Inventory & Cart Operations ────────────────────
+def reserve_stock_and_add_to_cart(session_id, item_name, qty, customer_id=None):
+    """
+    Atomically verifies inventory stock, decrements it, and adds to cart
+    within a SINGLE database transaction.
+    If stock is insufficient or any error occurs, rolls back cleanly.
+    """
+    clean_name = str(item_name or "").lower().strip()
+    try:
+        qty_int = int(qty)
+    except (ValueError, TypeError):
+        return {"success": False, "message": "Invalid quantity.", "status": 400}
+
+    if qty_int <= 0:
+        return {"success": False, "message": "Quantity must be > 0.", "status": 400}
+
+    with get_db() as db:
+        prod = db.query(Product).filter(Product.name == clean_name).with_for_update().first()
+        if not prod:
+            return {"success": False, "message": f"'{clean_name.capitalize()}' is not available.", "status": 404}
+        if qty_int > prod.stock:
+            return {"success": False, "message": f"Only {prod.stock} units in stock.", "status": 400}
+
+        # Atomically deduct stock
+        prod.stock -= qty_int
+        prod.updated_at = datetime.now(timezone.utc)
+
+        # Atomically update or insert cart item
+        query = db.query(CartItem).filter(CartItem.item_name == clean_name)
+        if customer_id:
+            cart_row = query.filter(CartItem.customer_id == int(customer_id)).first()
+        else:
+            cart_row = query.filter(
+                CartItem.session_id == str(session_id),
+                CartItem.customer_id.is_(None)
+            ).first()
+
+        if cart_row:
+            cart_row.qty += qty_int
+            cart_row.updated_at = datetime.now(timezone.utc)
+        else:
+            cart_row = CartItem(
+                session_id=str(session_id) if session_id else None,
+                customer_id=int(customer_id) if customer_id else None,
+                item_name=clean_name,
+                qty=qty_int,
+            )
+            db.add(cart_row)
+
+        return {
+            "success": True,
+            "message": f"Added {qty_int}x {clean_name.capitalize()} to cart!",
+            "remaining_stock": prod.stock,
+            "status": 200
+        }
+
+
+def release_stock_and_remove_from_cart(session_id, item_name, qty, customer_id=None):
+    """
+    Atomically increments inventory stock and removes/decrements from cart
+    within a SINGLE database transaction.
+    """
+    clean_name = str(item_name or "").lower().strip()
+    try:
+        qty_int = int(qty)
+    except (ValueError, TypeError):
+        return {"success": False, "message": "Invalid quantity.", "status": 400}
+
+    with get_db() as db:
+        query = db.query(CartItem).filter(CartItem.item_name == clean_name)
+        if customer_id:
+            cart_row = query.filter(CartItem.customer_id == int(customer_id)).first()
+        else:
+            cart_row = query.filter(
+                CartItem.session_id == str(session_id),
+                CartItem.customer_id.is_(None)
+            ).first()
+
+        if not cart_row:
+            return {"success": False, "message": f"'{clean_name.capitalize()}' not in cart.", "status": 404}
+        if qty_int <= 0 or qty_int > cart_row.qty:
+            return {"success": False, "message": f"You only have {cart_row.qty} in cart.", "status": 400}
+
+        # Restock product
+        prod = db.query(Product).filter(Product.name == clean_name).with_for_update().first()
+        if prod:
+            prod.stock += qty_int
+            prod.updated_at = datetime.now(timezone.utc)
+
+        # Update cart
+        if qty_int >= cart_row.qty:
+            db.delete(cart_row)
+        else:
+            cart_row.qty -= qty_int
+            cart_row.updated_at = datetime.now(timezone.utc)
+
+        return {
+            "success": True,
+            "message": f"Removed {qty_int}x {clean_name.capitalize()} from cart.",
+            "status": 200
+        }
+
+
+def release_stock_and_clear_cart(session_id=None, customer_id=None):
+    """
+    Atomically restores all inventory quantities and clears the cart
+    within a SINGLE database transaction.
+    """
+    with get_db() as db:
+        query = db.query(CartItem)
+        if customer_id:
+            items = query.filter(CartItem.customer_id == int(customer_id)).all()
+        elif session_id:
+            items = query.filter(
+                CartItem.session_id == str(session_id),
+                CartItem.customer_id.is_(None)
+            ).all()
+        else:
+            items = []
+
+        for it in items:
+            prod = db.query(Product).filter(Product.name == it.item_name).with_for_update().first()
+            if prod:
+                prod.stock += it.qty
+                prod.updated_at = datetime.now(timezone.utc)
+            db.delete(it)
+
+        return {"success": True, "message": "Cart cleared and stock restored."}
+
+
+def atomic_checkout(session_id, payment_method="Cash", tender_amount=0.0, customer_id=None, customer_name=None, customer_email=None):
+    """
+    Executes checkout as a single atomic ACID transaction:
+    1. Validates and reads all cart items
+    2. Builds receipt and verifies final amounts
+    3. Persists each sale line into the `sales` table
+    4. Clears active cart lines
+    All within a SINGLE transaction. Any failure triggers full rollback.
+    """
+    with get_db() as db:
+        query = db.query(CartItem)
+        if customer_id:
+            cart_rows = query.filter(CartItem.customer_id == int(customer_id)).all()
+            if not cart_rows and session_id:
+                cart_rows = db.query(CartItem).filter(
+                    CartItem.session_id == str(session_id),
+                    CartItem.customer_id.is_(None)
+                ).all()
+        elif session_id:
+            cart_rows = query.filter(
+                CartItem.session_id == str(session_id),
+                CartItem.customer_id.is_(None)
+            ).all()
+        else:
+            cart_rows = []
+
+        if not cart_rows:
+            return {"success": False, "message": "Your cart is empty!", "status": 400}
+
+        # Consolidate cart items
+        receipt = []
+        for it in cart_rows:
+            prod = db.query(Product).filter(Product.name == it.item_name).first()
+            unit_price = float(prod.price) if prod else 0.0
+            line_total = round(it.qty * unit_price, 2)
+            receipt.append({
+                "name": it.item_name,
+                "qty": it.qty,
+                "price": unit_price,
+                "total": line_total
+            })
+
+        grand_total = sum(i["total"] for i in receipt)
+        tax = round(grand_total * 0.0825, 2)
+        final_due = round(grand_total + tax, 2)
+        try:
+            tender_val = float(tender_amount or 0.0)
+        except (ValueError, TypeError):
+            tender_val = 0.0
+
+        clean_payment = str(payment_method or "Cash").strip()
+        if clean_payment not in ["Cash", "UPI", "Card"]:
+            clean_payment = "Cash"
+
+        actual_tender = tender_val if (clean_payment == "Cash" and tender_val > 0) else final_due
+        change_due = max(0.0, round(actual_tender - final_due, 2)) if clean_payment == "Cash" else 0.0
+        sold_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Persist sale lines
+        for item in receipt:
+            sale = Sale(
+                session_id=str(session_id) if session_id else "",
+                customer_id=int(customer_id) if customer_id else None,
+                customer_name=str(customer_name) if customer_name else None,
+                item_name=item["name"],
+                qty=item["qty"],
+                unit_price=item["price"],
+                total=item["total"],
+                sold_at=sold_at,
+                payment_method=clean_payment,
+                tender_amount=actual_tender,
+                change_due=change_due
+            )
+            db.add(sale)
+
+        # Clear cart rows
+        for it in cart_rows:
+            db.delete(it)
+
+        return {
+            "success": True,
+            "receipt": receipt,
+            "grand_total": grand_total,
+            "tax": tax,
+            "final_due": final_due,
+            "payment_method": clean_payment,
+            "tender_amount": actual_tender,
+            "change_due": change_due,
+            "customer": {
+                "id": customer_id,
+                "name": customer_name,
+                "email": customer_email
+            } if customer_id else None,
+            "status": 200
+        }
+
 
 

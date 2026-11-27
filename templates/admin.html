@@ -384,6 +384,14 @@
               <button class="btn btn-primary btn-full" id="commit-btn" onclick="commitStock()" disabled>
                 <span class="material-icons">check_circle</span> Commit Stock Change
               </button>
+              <div style="display:flex;gap:8px;margin-top:10px;">
+                <button class="btn btn-secondary" id="edit-btn" onclick="openEditModal(selectedItem)" disabled style="flex:1;">
+                  <span class="material-icons" style="font-size:16px;">edit</span> Edit Product
+                </button>
+                <button class="btn btn-secondary" id="delete-btn" onclick="deleteProductAction(selectedItem)" disabled style="color:var(--error);border-color:#fca5a5;" title="Delete Product">
+                  <span class="material-icons" style="font-size:16px;">delete</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -492,6 +500,66 @@
         </div>
         <button class="btn btn-primary btn-full btn-lg" id="add-item-btn" onclick="addItem()">
           <span class="material-icons">add_circle</span> Add to Store Catalog
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ EDIT PRODUCT MODAL ═══ -->
+  <div class="modal-overlay" id="edit-modal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeEditModal()"><span class="material-icons" style="font-size:18px;">close</span></button>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <div style="width:42px;height:42px;border-radius:10px;background:#e0f2fe;display:flex;align-items:center;justify-content:center;">
+          <span class="material-icons" style="color:#0284c7;font-size:22px;">edit_note</span>
+        </div>
+        <div>
+          <div class="modal-title" style="margin-bottom:0;">Edit Product Details</div>
+          <div style="font-size:12px;color:var(--outline);">Update price, stock, category, or title</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <input type="hidden" id="edit-orig-name"/>
+        <div class="form-group">
+          <label class="form-label">Product Name <span style="color:var(--error);">*</span></label>
+          <div class="form-input-icon" style="position:relative;">
+            <span class="material-icons" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:17px;color:var(--outline);">label</span>
+            <input class="form-input" type="text" id="edit-item-name" placeholder="Product name" style="padding-left:40px;"/>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Current Stock (units)</label>
+            <div class="form-input-icon" style="position:relative;">
+              <span class="material-icons" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:17px;color:var(--outline);">inventory</span>
+              <input class="form-input" type="number" id="edit-item-qty" min="0" style="padding-left:40px;"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unit Price (₹) <span style="color:var(--error);">*</span></label>
+            <div class="form-input-icon" style="position:relative;">
+              <span class="material-icons" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:17px;color:var(--outline);">currency_rupee</span>
+              <input class="form-input" type="number" id="edit-item-price" min="0" step="0.01" style="padding-left:40px;"/>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-input form-select" id="edit-item-cat">
+            <option>Staples</option>
+            <option>Oils</option>
+            <option>Cleaning</option>
+            <option>Beverages</option>
+            <option>Dairy</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div id="edit-error" class="error-msg hidden" style="background:var(--error-container);border:1px solid #f9a8a8;border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;color:#7f1d1d;display:flex;align-items:center;gap:6px;">
+          <span class="material-icons" style="font-size:16px;">error_outline</span>
+          <span id="edit-error-text"></span>
+        </div>
+        <button class="btn btn-primary btn-full btn-lg" id="save-item-btn" onclick="saveProductEdit()">
+          <span class="material-icons">save</span> Save Product Changes
         </button>
       </div>
     </div>
@@ -662,6 +730,10 @@
       document.getElementById('adj-qty').value = item.stock;
       document.getElementById('projected-label').textContent = `${item.stock} Units`;
       document.getElementById('commit-btn').disabled = false;
+      const editBtn = document.getElementById('edit-btn');
+      const delBtn = document.getElementById('delete-btn');
+      if (editBtn) editBtn.disabled = false;
+      if (delBtn) delBtn.disabled = false;
       document.getElementById('adj-qty').oninput = function() {
         document.getElementById('projected-label').textContent = `${this.value||0} Units`;
       };
@@ -705,6 +777,7 @@
       const name = document.getElementById('new-item-name').value.trim().toLowerCase();
       const qty = parseInt(document.getElementById('new-item-qty').value);
       const price = parseFloat(document.getElementById('new-item-price').value);
+      const cat = document.getElementById('new-item-cat').value;
       const errBox = document.getElementById('add-error');
       const errText = document.getElementById('add-error-text');
       errBox.classList.add('hidden');
@@ -719,7 +792,7 @@
 
       const res = await fetch('/api/admin/add_item', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({item: name, qty, price})
+        body: JSON.stringify({item: name, qty, price, category: cat})
       });
       const data = await res.json();
 
@@ -736,6 +809,103 @@
       } else {
         errText.textContent = data.message;
         errBox.classList.remove('hidden');
+      }
+    }
+
+    /* ── Edit Product ── */
+    function openEditModal(name) {
+      const item = allItems.find(i => i.name === name);
+      if (!item) return;
+      document.getElementById('edit-orig-name').value = item.name;
+      document.getElementById('edit-item-name').value = item.name;
+      document.getElementById('edit-item-qty').value = item.stock;
+      document.getElementById('edit-item-price').value = item.price;
+      const catSelect = document.getElementById('edit-item-cat');
+      if (catSelect) catSelect.value = item.category || 'General';
+      document.getElementById('edit-error').classList.add('hidden');
+      document.getElementById('edit-modal').classList.add('open');
+    }
+
+    function closeEditModal() {
+      document.getElementById('edit-modal').classList.remove('open');
+    }
+
+    async function saveProductEdit() {
+      const origName = document.getElementById('edit-orig-name').value;
+      const newName = document.getElementById('edit-item-name').value.trim().toLowerCase();
+      const qty = parseInt(document.getElementById('edit-item-qty').value);
+      const price = parseFloat(document.getElementById('edit-item-price').value);
+      const category = document.getElementById('edit-item-cat').value;
+      const errBox = document.getElementById('edit-error');
+      const errText = document.getElementById('edit-error-text');
+      errBox.classList.add('hidden');
+
+      if (!newName) { errText.textContent = 'Product name is required.'; errBox.classList.remove('hidden'); return; }
+      if (isNaN(qty) || qty < 0) { errText.textContent = 'Enter a valid stock quantity.'; errBox.classList.remove('hidden'); return; }
+      if (isNaN(price) || price <= 0) { errText.textContent = 'Enter a valid price.'; errBox.classList.remove('hidden'); return; }
+
+      const btn = document.getElementById('save-item-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite">sync</span> Saving…';
+
+      try {
+        const res = await fetch(`/api/admin/product/${encodeURIComponent(origName)}`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({new_name: newName, stock: qty, price: price, category: category})
+        });
+        const data = await res.json();
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons">save</span> Save Product Changes';
+
+        if (data.success) {
+          showToast(data.message || 'Product updated successfully.', 'success');
+          closeEditModal();
+          await loadItems();
+          selectItem(newName);
+        } else {
+          errText.textContent = data.message || 'Failed to update product.';
+          errBox.classList.remove('hidden');
+        }
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons">save</span> Save Product Changes';
+        errText.textContent = 'Network or server error.';
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    /* ── Delete Product ── */
+    async function deleteProductAction(name) {
+      if (!name) return;
+      if (!confirm(`Are you sure you want to permanently delete '${capitalize(name)}' from the store catalog?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/admin/product/${encodeURIComponent(name)}`, {
+          method: 'DELETE',
+          headers: {'Content-Type': 'application/json'}
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message || 'Product deleted.', 'success');
+          selectedItem = null;
+          document.getElementById('selected-item-display').innerHTML = `
+            <div style="background:var(--surface-low);border:1px solid var(--surface-highest);border-radius:var(--radius-lg);padding:var(--space-md);">
+              <div style="font-size:11px;font-weight:700;color:var(--outline);margin-bottom:4px;">No Item Selected</div>
+              <div style="font-size:12px;color:var(--on-surface-variant);">Click a row in the table to select an item for adjustment.</div>
+            </div>`;
+          document.getElementById('commit-btn').disabled = true;
+          const editBtn = document.getElementById('edit-btn');
+          const delBtn = document.getElementById('delete-btn');
+          if (editBtn) editBtn.disabled = true;
+          if (delBtn) delBtn.disabled = true;
+          await loadItems();
+        } else {
+          showToast(data.message || 'Failed to delete product.', 'error');
+        }
+      } catch (e) {
+        showToast('Network error while deleting product.', 'error');
       }
     }
 

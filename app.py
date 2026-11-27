@@ -10,7 +10,11 @@ from database import (
     close_db_session, register_customer, authenticate_customer,
     get_customer_by_id, get_customer_by_email, get_customer_orders,
     authenticate_staff, create_staff_user, change_staff_password,
-    get_staff_user_by_id, get_all_staff_users
+    get_staff_user_by_id, get_all_staff_users,
+    get_cart_db, add_to_cart_db, remove_from_cart_db, clear_cart_db, merge_cart_on_login,
+    create_product, update_product, delete_product,
+    reserve_stock_and_add_to_cart, release_stock_and_remove_from_cart,
+    release_stock_and_clear_cart, atomic_checkout
 )
 
 app = Flask(__name__)
@@ -23,9 +27,6 @@ app.permanent_session_lifetime = timedelta(hours=8)
 @app.teardown_appcontext
 def shutdown_session(exception=None):
     close_db_session()
-
-# In-memory carts only (per session, not worth persisting)
-carts = {}
 
 # ── Initialise database on startup ──────────────────────────────────
 init_db()
@@ -61,7 +62,8 @@ def get_cart():
     if not sid:
         sid = str(uuid.uuid4())
         session["sid"] = sid
-    return carts.setdefault(sid, {}), sid
+    cust_id = session.get("customer_id")
+    return get_cart_db(session_id=sid, customer_id=cust_id), sid
 
 
 # ── Pages ────────────────────────────────────────────────────────────
@@ -102,6 +104,14 @@ def api_items():
     return jsonify(items)
 
 
+@app.route("/api/items/<item_name>")
+def api_get_item(item_name):
+    prod = get_product(item_name)
+    if not prod:
+        return jsonify({"success": False, "message": f"Product '{item_name}' not found."}), 404
+    return jsonify({"success": True, "product": prod})
+
+
 @app.route("/api/cart")
 def api_cart():
     cart, _ = get_cart()
@@ -115,123 +125,59 @@ def api_cart():
 
 @app.route("/api/cart/add", methods=["POST"])
 def api_cart_add():
-    data = request.json
+    data = request.json or {}
     item = data.get("item", "").lower().strip()
-    try:
-        qty = int(data.get("qty", 0))
-    except Exception:
-        return jsonify({"success": False, "message": "Invalid quantity."}), 400
+    qty = data.get("qty", 0)
 
-    prod = get_product(item)
-    if not prod:
-        return jsonify({"success": False, "message": f"'{item}' is not available."}), 404
-    if qty <= 0:
-        return jsonify({"success": False, "message": "Quantity must be > 0."}), 400
-    if qty > prod["stock"]:
-        return jsonify({"success": False, "message": f"Only {prod['stock']} units in stock."}), 400
-
-    cart, _ = get_cart()
-    current = cart.get(item, 0)
-    new_stock = prod["stock"] - qty
-    update_stock(item, new_stock)
-    cart[item] = current + qty
-    return jsonify({"success": True, "message": f"Added {qty}x {item.capitalize()} to cart!"})
+    cart, sid = get_cart()
+    cust_id = session.get("customer_id")
+    result = reserve_stock_and_add_to_cart(session_id=sid, item_name=item, qty=qty, customer_id=cust_id)
+    status_code = result.pop("status", 200 if result.get("success") else 400)
+    return jsonify(result), status_code
 
 
 @app.route("/api/cart/remove", methods=["POST"])
 def api_cart_remove():
-    data = request.json
+    data = request.json or {}
     item = data.get("item", "").lower().strip()
-    try:
-        qty = int(data.get("qty", 0))
-    except Exception:
-        return jsonify({"success": False, "message": "Invalid quantity."}), 400
+    qty = data.get("qty", 0)
 
-    cart, _ = get_cart()
-    if item not in cart:
-        return jsonify({"success": False, "message": f"'{item}' not in cart."}), 404
-    if qty <= 0 or qty > cart[item]:
-        return jsonify({"success": False, "message": f"You only have {cart.get(item,0)} in cart."}), 400
-
-    prod = get_product(item)
-    if prod:
-        update_stock(item, prod["stock"] + qty)
-    cart[item] -= qty
-    if cart[item] == 0:
-        del cart[item]
-    return jsonify({"success": True, "message": f"Removed {qty}x {item.capitalize()} from cart."})
+    cart, sid = get_cart()
+    cust_id = session.get("customer_id")
+    result = release_stock_and_remove_from_cart(session_id=sid, item_name=item, qty=qty, customer_id=cust_id)
+    status_code = result.pop("status", 200 if result.get("success") else 400)
+    return jsonify(result), status_code
 
 
 @app.route("/api/cart/clear", methods=["POST"])
 def api_cart_clear():
-    cart, _ = get_cart()
-    for name, qty in cart.items():
-        prod = get_product(name)
-        if prod:
-            update_stock(name, prod["stock"] + qty)
-    cart.clear()
-    return jsonify({"success": True})
+    cart, sid = get_cart()
+    cust_id = session.get("customer_id")
+    result = release_stock_and_clear_cart(session_id=sid, customer_id=cust_id)
+    return jsonify(result)
 
 
 @app.route("/api/checkout", methods=["POST"])
 def api_checkout():
     cart, sid = get_cart()
-    if not cart:
-        return jsonify({"success": False, "message": "Your cart is empty!"}), 400
-
-    data = request.json or {}
-    payment_method = str(data.get("payment_method", "Cash")).strip()
-    if payment_method not in ["Cash", "UPI", "Card"]:
-        payment_method = "Cash"
-    try:
-        tender_amount = float(data.get("tender_amount", 0.0) or 0.0)
-    except Exception:
-        tender_amount = 0.0
-
-    receipt = []
-    for name, qty in cart.items():
-        prod = get_product(name)
-        price = prod["price"] if prod else 0
-        total = price * qty
-        receipt.append({"name": name, "qty": qty, "price": price, "total": total})
-
-    grand_total = sum(i["total"] for i in receipt)
-    tax = round(grand_total * 0.0825, 2)
-    final_due = round(grand_total + tax, 2)
-    actual_tender = tender_amount if (payment_method == "Cash" and tender_amount > 0) else final_due
-    change_due = max(0.0, round(actual_tender - final_due, 2)) if payment_method == "Cash" else 0.0
-
     cust_id = session.get("customer_id")
     cust_name = session.get("customer_name")
     cust_email = session.get("customer_email")
 
-    # Persist each sale line to the database
-    for item in receipt:
-        record_sale(
-            sid, item["name"], item["qty"], item["price"],
-            payment_method=payment_method,
-            tender_amount=actual_tender,
-            change_due=change_due,
-            customer_id=cust_id,
-            customer_name=cust_name
-        )
+    data = request.json or {}
+    payment_method = data.get("payment_method", "Cash")
+    tender_amount = data.get("tender_amount", 0.0)
 
-    cart.clear()
-    return jsonify({
-        "success": True,
-        "receipt": receipt,
-        "grand_total": grand_total,
-        "tax": tax,
-        "final_due": final_due,
-        "payment_method": payment_method,
-        "tender_amount": tender_amount,
-        "change_due": change_due,
-        "customer": {
-            "id": cust_id,
-            "name": cust_name,
-            "email": cust_email
-        } if cust_id else None
-    })
+    result = atomic_checkout(
+        session_id=sid,
+        payment_method=payment_method,
+        tender_amount=tender_amount,
+        customer_id=cust_id,
+        customer_name=cust_name,
+        customer_email=cust_email
+    )
+    status_code = result.pop("status", 200 if result.get("success") else 400)
+    return jsonify(result), status_code
 
 
 @app.route("/api/cashier/z_report")
@@ -339,6 +285,7 @@ def api_admin_stock():
 def api_admin_add_item():
     data = request.json or {}
     item = data.get("item", "").lower().strip()
+    category = data.get("category", "General")
     try:
         qty   = int(data.get("qty", 0))
         price = float(data.get("price", 0))
@@ -347,8 +294,63 @@ def api_admin_add_item():
     if not item:
         return jsonify({"success": False, "message": "Item name required."}), 400
 
-    add_product(item, price, qty)
+    add_product(item, price, qty, category)
     return jsonify({"success": True, "message": f"'{item.capitalize()}' added to store!"})
+
+
+@app.route("/api/admin/product/create", methods=["POST"])
+@admin_required
+def api_admin_product_create():
+    """Create a new product with full validation."""
+    data = request.json or {}
+    name = data.get("name") or data.get("item")
+    price = data.get("price", 0)
+    stock = data.get("stock") if "stock" in data else data.get("qty", 0)
+    category = data.get("category", "General")
+    result = create_product(name, price, stock, category)
+    status_code = 201 if result.get("success") else 400
+    return jsonify(result), status_code
+
+
+@app.route("/api/admin/product/update", methods=["POST", "PUT"])
+@app.route("/api/admin/product/<item_name>", methods=["PUT", "POST"])
+@admin_required
+def api_admin_product_update(item_name=None):
+    """Update an existing product's details (price, stock, category, rename)."""
+    data = request.json or {}
+    target_name = item_name or data.get("name") or data.get("item")
+    if not target_name:
+        return jsonify({"success": False, "message": "Target product name is required."}), 400
+
+    new_name = data.get("new_name")
+    price = data.get("price")
+    stock = data.get("stock") if "stock" in data else data.get("qty")
+    category = data.get("category")
+
+    result = update_product(
+        name=target_name,
+        new_name=new_name,
+        price=price,
+        stock=stock,
+        category=category
+    )
+    status_code = 200 if result.get("success") else (404 if "not found" in result.get("message", "").lower() else 400)
+    return jsonify(result), status_code
+
+
+@app.route("/api/admin/product/delete", methods=["POST", "DELETE"])
+@app.route("/api/admin/product/<item_name>", methods=["DELETE"])
+@admin_required
+def api_admin_product_delete(item_name=None):
+    """Delete a product from the catalog and active cart reservations."""
+    data = request.json or {} if request.is_json else {}
+    target_name = item_name or data.get("name") or data.get("item") or request.args.get("name")
+    if not target_name:
+        return jsonify({"success": False, "message": "Target product name is required."}), 400
+
+    result = delete_product(target_name)
+    status_code = 200 if result.get("success") else 404
+    return jsonify(result), status_code
 
 
 @app.route("/api/admin/sales")
@@ -373,6 +375,10 @@ def api_customer_register():
         return jsonify(result), 400
 
     customer = result["customer"]
+    sid = session.get("sid")
+    if sid:
+        merge_cart_on_login(sid, customer["id"])
+
     session["customer_id"] = customer["id"]
     session["customer_name"] = customer["name"]
     session["customer_email"] = customer["email"]
@@ -394,6 +400,10 @@ def api_customer_login():
     customer = authenticate_customer(email, password)
     if not customer:
         return jsonify({"success": False, "message": "Invalid email or password."}), 401
+
+    sid = session.get("sid")
+    if sid:
+        merge_cart_on_login(sid, customer["id"])
 
     session["customer_id"] = customer["id"]
     session["customer_name"] = customer["name"]
