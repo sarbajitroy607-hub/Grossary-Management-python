@@ -4,11 +4,17 @@ import uuid
 
 from database import (
     init_db, get_all_products, get_product,
-    update_stock, add_product, record_sale, get_sales_history, get_z_report
+    update_stock, add_product, record_sale, get_sales_history, get_z_report,
+    close_db_session
 )
 
 app = Flask(__name__)
 app.secret_key = 'kiryana_store_secret_key_2024'
+
+# Cleanup SQLAlchemy scoped session on application context teardown
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    close_db_session()
 
 # In-memory carts only (per session, not worth persisting)
 carts = {}

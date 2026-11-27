@@ -1,169 +1,297 @@
 """
-database.py — CSV-based persistent storage for GroceryPro
-----------------------------------------------------------
-Two CSV files inside the  data/  folder:
-  data/products.csv  —  all grocery items (name, price, stock, category)
-  data/sales.csv     —  every checkout line-item (session, item, qty, price, total, date)
+database.py — SQLite & SQLAlchemy persistent storage for GroceryPro
+-------------------------------------------------------------------
+Replaces legacy CSV storage with an ACID-compliant SQLite relational
+database managed via SQLAlchemy ORM. Includes automatic backward-compatible
+migration for existing CSV records.
 """
 
 import csv
 import os
-from datetime import datetime
+from contextlib import contextmanager
+from datetime import datetime, timezone
 
-# ── File paths ───────────────────────────────────────────────────────
-BASE_DIR      = os.path.dirname(__file__)
-DATA_DIR      = os.path.join(BASE_DIR, "data")
-PRODUCTS_CSV  = os.path.join(DATA_DIR, "products.csv")
-SALES_CSV     = os.path.join(DATA_DIR, "sales.csv")
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    create_engine,
+    desc,
+    func,
+)
+from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
 
-PRODUCTS_FIELDS = ["name", "price", "stock", "category"]
-SALES_FIELDS    = ["session_id", "item_name", "qty", "unit_price", "total", "sold_at", "payment_method", "tender_amount", "change_due"]
+# ── Paths & Configuration ───────────────────────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+DB_PATH = os.path.join(DATA_DIR, "store.db")
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_PATH}")
 
-# Default stock loaded when products.csv doesn't exist yet
+PRODUCTS_CSV = os.path.join(DATA_DIR, "products.csv")
+SALES_CSV = os.path.join(DATA_DIR, "sales.csv")
+
+# Default stock seeded when no existing data or CSV is found
 DEFAULT_PRODUCTS = [
-    {"name": "rice",  "price": 50.0,  "stock": 10, "category": "Staples"},
-    {"name": "wheat", "price": 40.0,  "stock": 10, "category": "Staples"},
-    {"name": "flour", "price": 30.0,  "stock": 10, "category": "Staples"},
-    {"name": "oil",   "price": 100.0, "stock": 10, "category": "Oils"},
-    {"name": "daal",  "price": 60.0,  "stock": 10, "category": "Staples"},
-    {"name": "soap",  "price": 20.0,  "stock": 10, "category": "Cleaning"},
-    {"name": "surf",  "price": 25.0,  "stock": 10, "category": "Cleaning"},
+    {"name": "rice", "price": 50.0, "stock": 10, "category": "Staples"},
+    {"name": "wheat", "price": 40.0, "stock": 10, "category": "Staples"},
+    {"name": "flour", "price": 30.0, "stock": 10, "category": "Staples"},
+    {"name": "oil", "price": 100.0, "stock": 10, "category": "Oils"},
+    {"name": "daal", "price": 60.0, "stock": 10, "category": "Staples"},
+    {"name": "soap", "price": 20.0, "stock": 10, "category": "Cleaning"},
+    {"name": "surf", "price": 25.0, "stock": 10, "category": "Cleaning"},
 ]
 
+# ── SQLAlchemy Setup ─────────────────────────────────────────────────
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+    echo=False,
+)
 
-# ── Init ─────────────────────────────────────────────────────────────
+SessionLocal = scoped_session(
+    sessionmaker(autocommit=False, autoflush=False, bind=engine)
+)
 
+Base = declarative_base()
+
+
+# ── Models ───────────────────────────────────────────────────────────
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), unique=True, nullable=False, index=True)
+    price = Column(Float, nullable=False)
+    stock = Column(Integer, nullable=False, default=0)
+    category = Column(String(100), nullable=False, default="General")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "price": float(self.price),
+            "stock": int(self.stock),
+            "category": self.category or "General",
+        }
+
+
+class Sale(Base):
+    __tablename__ = "sales"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(100), index=True, nullable=True)
+    item_name = Column(String(100), nullable=False)
+    qty = Column(Integer, nullable=False, default=1)
+    unit_price = Column(Float, nullable=False)
+    total = Column(Float, nullable=False)
+    sold_at = Column(String(30), nullable=False, index=True)
+    payment_method = Column(String(50), nullable=False, default="Cash")
+    tender_amount = Column(Float, nullable=False, default=0.0)
+    change_due = Column(Float, nullable=False, default=0.0)
+
+    def to_dict(self):
+        return {
+            "session_id": self.session_id,
+            "item_name": self.item_name,
+            "qty": self.qty,
+            "unit_price": self.unit_price,
+            "total": self.total,
+            "sold_at": self.sold_at,
+            "payment_method": self.payment_method,
+            "tender_amount": self.tender_amount,
+            "change_due": self.change_due,
+        }
+
+
+# ── Database Session Context Manager ─────────────────────────────────
+@contextmanager
+def get_db():
+    """Transactional database session scope context manager."""
+    session = SessionLocal()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def close_db_session():
+    """Removes current thread's scoped session."""
+    SessionLocal.remove()
+
+
+# ── Initialization & Migration ───────────────────────────────────────
 def init_db():
-    """Create the data/ folder and CSV files if they don't exist."""
+    """
+    Ensure the data/ folder exists, create all SQLite tables,
+    and seamlessly migrate existing data from CSV files if present.
+    """
     os.makedirs(DATA_DIR, exist_ok=True)
+    Base.metadata.create_all(bind=engine)
 
-    # products.csv — seed defaults only on first run
-    if not os.path.exists(PRODUCTS_CSV):
-        _write_products(DEFAULT_PRODUCTS)
+    with get_db() as db:
+        # Check products table
+        product_count = db.query(Product).count()
+        if product_count == 0:
+            migrated = False
+            if os.path.exists(PRODUCTS_CSV):
+                try:
+                    with open(PRODUCTS_CSV, "r", newline="", encoding="utf-8") as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            name = (row.get("name") or "").strip().lower()
+                            if not name:
+                                continue
+                            price = float(row.get("price", 0.0))
+                            stock = int(row.get("stock", 0))
+                            category = (row.get("category") or "General").strip()
+                            db.add(Product(name=name, price=price, stock=stock, category=category))
+                    db.flush()
+                    migrated = True
+                except Exception as e:
+                    print(f"Warning: Failed migrating products from CSV: {e}")
 
-    # sales.csv — just create a header-only file if missing, or migrate header if needed
-    if not os.path.exists(SALES_CSV):
-        with open(SALES_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
-            writer.writeheader()
-    else:
-        # Check if header needs migration to include payment_method, tender_amount, change_due
-        try:
-            with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
-                first_line = f.readline().strip()
-            if "tender_amount" not in first_line or "payment_method" not in first_line:
+            if not migrated or db.query(Product).count() == 0:
+                for item in DEFAULT_PRODUCTS:
+                    db.add(Product(
+                        name=item["name"],
+                        price=float(item["price"]),
+                        stock=int(item["stock"]),
+                        category=item.get("category", "General")
+                    ))
+
+        # Check sales table
+        sales_count = db.query(Sale).count()
+        if sales_count == 0 and os.path.exists(SALES_CSV):
+            try:
                 with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
-                    reader = list(csv.DictReader(f))
-                with open(SALES_CSV, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
-                    writer.writeheader()
-                    for r in reader:
-                        if "payment_method" not in r or not r["payment_method"]:
-                            r["payment_method"] = "Cash"
-                        if "tender_amount" not in r:
-                            r["tender_amount"] = r.get("total", 0.0)
-                        if "change_due" not in r:
-                            r["change_due"] = 0.0
-                        writer.writerow({k: r.get(k, "") for k in SALES_FIELDS})
-        except Exception:
-            pass
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        item_name = (row.get("item_name") or "").strip().lower()
+                        if not item_name:
+                            continue
+                        session_id = row.get("session_id", "")
+                        qty = int(row.get("qty", 1))
+                        unit_price = float(row.get("unit_price", 0.0))
+                        total = float(row.get("total", qty * unit_price))
+                        sold_at = row.get("sold_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        payment_method = row.get("payment_method") or "Cash"
+                        tender_amount = float(row.get("tender_amount") or total)
+                        change_due = float(row.get("change_due") or 0.0)
 
-
-# ── Internal helpers ─────────────────────────────────────────────────
-
-def _read_products():
-    """Read products.csv and return list of dicts (typed correctly)."""
-    products = []
-    with open(PRODUCTS_CSV, "r", newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            products.append({
-                "name":     row["name"],
-                "price":    float(row["price"]),
-                "stock":    int(row["stock"]),
-                "category": row.get("category", "General"),
-            })
-    return products
-
-
-def _write_products(products):
-    """Overwrite products.csv with the given list of dicts."""
-    with open(PRODUCTS_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=PRODUCTS_FIELDS)
-        writer.writeheader()
-        writer.writerows(products)
+                        db.add(Sale(
+                            session_id=session_id,
+                            item_name=item_name,
+                            qty=qty,
+                            unit_price=unit_price,
+                            total=total,
+                            sold_at=sold_at,
+                            payment_method=payment_method,
+                            tender_amount=tender_amount,
+                            change_due=change_due
+                        ))
+            except Exception as e:
+                print(f"Warning: Failed migrating sales from CSV: {e}")
 
 
 # ── Product API ───────────────────────────────────────────────────────
-
 def get_all_products():
-    """Return list of all product dicts."""
-    return _read_products()
+    """Return list of all product dicts sorted by ID."""
+    with get_db() as db:
+        products = db.query(Product).order_by(Product.id.asc()).all()
+        return [p.to_dict() for p in products]
 
 
 def get_product(name):
     """Return one product dict by name, or None."""
-    for p in _read_products():
-        if p["name"] == name:
-            return p
-    return None
+    if not name:
+        return None
+    clean_name = str(name).lower().strip()
+    with get_db() as db:
+        p = db.query(Product).filter(Product.name == clean_name).first()
+        return p.to_dict() if p else None
 
 
 def update_stock(name, new_qty):
-    """Set the stock of a product and save to CSV. Returns True on success."""
-    products = _read_products()
-    found = False
-    for p in products:
-        if p["name"] == name:
-            p["stock"] = new_qty
-            found = True
-            break
-    if found:
-        _write_products(products)
-    return found
+    """Set the stock of a product. Returns True on success, False if not found."""
+    if not name:
+        return False
+    clean_name = str(name).lower().strip()
+    with get_db() as db:
+        p = db.query(Product).filter(Product.name == clean_name).first()
+        if p:
+            p.stock = int(new_qty)
+            p.updated_at = datetime.now(timezone.utc)
+            return True
+        return False
 
 
 def add_product(name, price, qty, category="General"):
-    """Add a new product or update an existing one, then save to CSV."""
-    products = _read_products()
-    for p in products:
-        if p["name"] == name:          # update existing
-            p["price"]    = price
-            p["stock"]    = qty
-            p["category"] = category
-            _write_products(products)
-            return
-    # new product
-    products.append({"name": name, "price": price, "stock": qty, "category": category})
-    _write_products(products)
+    """Add a new product or update an existing one."""
+    if not name:
+        return
+    clean_name = str(name).lower().strip()
+    clean_cat = (category or "General").strip()
+    with get_db() as db:
+        p = db.query(Product).filter(Product.name == clean_name).first()
+        if p:
+            p.price = float(price)
+            p.stock = int(qty)
+            p.category = clean_cat
+            p.updated_at = datetime.now(timezone.utc)
+        else:
+            new_p = Product(
+                name=clean_name,
+                price=float(price),
+                stock=int(qty),
+                category=clean_cat
+            )
+            db.add(new_p)
 
 
 # ── Sales API ─────────────────────────────────────────────────────────
+def record_sale(
+    session_id,
+    item_name,
+    qty,
+    unit_price,
+    payment_method="Cash",
+    tender_amount=0.0,
+    change_due=0.0
+):
+    """Insert one sale record with tender reconciliation into SQLite."""
+    sold_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    qty_int = int(qty)
+    price_val = float(unit_price)
+    total_val = round(qty_int * price_val, 2)
+    clean_item = str(item_name).lower().strip()
 
-def record_sale(session_id, item_name, qty, unit_price, payment_method="Cash", tender_amount=0.0, change_due=0.0):
-    """Append one sale line to sales.csv with tender reconciliation."""
-    with open(SALES_CSV, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=SALES_FIELDS)
-        writer.writerow({
-            "session_id":     session_id,
-            "item_name":      item_name,
-            "qty":            qty,
-            "unit_price":     unit_price,
-            "total":          round(qty * unit_price, 2),
-            "sold_at":        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "payment_method": payment_method or "Cash",
-            "tender_amount":  round(float(tender_amount or 0.0), 2),
-            "change_due":     round(float(change_due or 0.0), 2),
-        })
+    with get_db() as db:
+        sale = Sale(
+            session_id=session_id,
+            item_name=clean_item,
+            qty=qty_int,
+            unit_price=price_val,
+            total=total_val,
+            sold_at=sold_at,
+            payment_method=payment_method or "Cash",
+            tender_amount=round(float(tender_amount or 0.0), 2),
+            change_due=round(float(change_due or 0.0), 2),
+        )
+        db.add(sale)
 
 
 def get_sales_history(limit=50):
     """Return the last `limit` sales rows as list of dicts (newest first)."""
-    rows = []
-    if os.path.exists(SALES_CSV):
-        with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                rows.append(dict(row))
-    return list(reversed(rows))[:limit]
+    with get_db() as db:
+        sales = db.query(Sale).order_by(desc(Sale.id)).limit(limit).all()
+        return [s.to_dict() for s in sales]
 
 
 def get_z_report(target_date=None):
@@ -174,13 +302,9 @@ def get_z_report(target_date=None):
     if not target_date:
         target_date = datetime.now().strftime("%Y-%m-%d")
 
-    sales = []
-    if os.path.exists(SALES_CSV):
-        with open(SALES_CSV, "r", newline="", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                sold_at = row.get("sold_at", "")
-                if sold_at.startswith(target_date):
-                    sales.append(row)
+    with get_db() as db:
+        sales_models = db.query(Sale).filter(Sale.sold_at.like(f"{target_date}%")).all()
+        sales = [s.to_dict() for s in sales_models]
 
     total_items_sold = sum(int(s.get("qty", 1)) for s in sales)
     net_sales = sum(float(s.get("total", 0.0)) for s in sales)
